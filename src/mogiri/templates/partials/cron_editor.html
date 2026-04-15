@@ -1,0 +1,163 @@
+{#
+  Reusable cron schedule editor.
+  Required variables:
+    prefix     - unique prefix for field IDs (e.g. "job" or "wf")
+    cron_parts - list of 5 strings [minute, hour, day, month, weekday]
+    schedule_type  - "cron", "once", or "none"
+    schedule_value - current schedule_value string
+    show_none  - whether to show "None (Manual)" option (true/false)
+    preview_url - URL for cron preview API
+#}
+
+<label>Schedule Type</label>
+<div class="schedule-radios">
+    <label>
+        <input type="radio" name="{{ prefix }}_schedule_type" value="cron"
+               {{ 'checked' if schedule_type == 'cron' else '' }}
+               onchange="{{ prefix }}ToggleSchedule()">
+        Cron
+    </label>
+    <label>
+        <input type="radio" name="{{ prefix }}_schedule_type" value="once"
+               {{ 'checked' if schedule_type == 'once' else '' }}
+               onchange="{{ prefix }}ToggleSchedule()">
+        One-time
+    </label>
+    {% if show_none %}
+    <label>
+        <input type="radio" name="{{ prefix }}_schedule_type" value="none"
+               {{ 'checked' if schedule_type == 'none' or not schedule_type else '' }}
+               onchange="{{ prefix }}ToggleSchedule()">
+        None <small style="color: var(--color-text-muted);">(Manual{% if prefix == 'job' %} / Chain{% endif %})</small>
+    </label>
+    {% endif %}
+</div>
+
+<!-- Cron fields -->
+<div id="{{ prefix }}-cron-fields" class="cron-editor"
+     style="{{ 'display:none' if schedule_type != 'cron' else '' }}">
+    <div class="cron-grid">
+        <div class="cron-field">
+            <label for="{{ prefix }}_cron_minute">Minute</label>
+            <input type="text" id="{{ prefix }}_cron_minute"
+                   value="{{ cron_parts[0] }}" placeholder="*"
+                   oninput="{{ prefix }}UpdateCronPreview()">
+            <div class="cron-hint">0-59</div>
+        </div>
+        <div class="cron-field">
+            <label for="{{ prefix }}_cron_hour">Hour</label>
+            <input type="text" id="{{ prefix }}_cron_hour"
+                   value="{{ cron_parts[1] }}" placeholder="*"
+                   oninput="{{ prefix }}UpdateCronPreview()">
+            <div class="cron-hint">0-23</div>
+        </div>
+        <div class="cron-field">
+            <label for="{{ prefix }}_cron_day">Day</label>
+            <input type="text" id="{{ prefix }}_cron_day"
+                   value="{{ cron_parts[2] }}" placeholder="*"
+                   oninput="{{ prefix }}UpdateCronPreview()">
+            <div class="cron-hint">1-31</div>
+        </div>
+        <div class="cron-field">
+            <label for="{{ prefix }}_cron_month">Month</label>
+            <input type="text" id="{{ prefix }}_cron_month"
+                   value="{{ cron_parts[3] }}" placeholder="*"
+                   oninput="{{ prefix }}UpdateCronPreview()">
+            <div class="cron-hint">1-12</div>
+        </div>
+        <div class="cron-field">
+            <label for="{{ prefix }}_cron_weekday">Weekday</label>
+            <input type="text" id="{{ prefix }}_cron_weekday"
+                   value="{{ cron_parts[4] }}" placeholder="*"
+                   oninput="{{ prefix }}UpdateCronPreview()">
+            <div class="cron-hint">0-6 (Mon-Sun)</div>
+        </div>
+    </div>
+    <div class="cron-expression-row">
+        <span class="cron-expression-label">Expression:</span>
+        <code id="{{ prefix }}-cron-expression" class="mono">{{ cron_parts | join(' ') }}</code>
+    </div>
+    <div class="cron-presets">
+        <span class="cron-presets-label">Presets:</span>
+        <button type="button" class="btn btn-sm" onclick="{{ prefix }}SetCron('* * * * *')">Every min</button>
+        <button type="button" class="btn btn-sm" onclick="{{ prefix }}SetCron('*/5 * * * *')">Every 5 min</button>
+        <button type="button" class="btn btn-sm" onclick="{{ prefix }}SetCron('0 * * * *')">Every hour</button>
+        <button type="button" class="btn btn-sm" onclick="{{ prefix }}SetCron('0 0 * * *')">Daily</button>
+        <button type="button" class="btn btn-sm" onclick="{{ prefix }}SetCron('0 0 * * 0')">Weekly</button>
+        <button type="button" class="btn btn-sm" onclick="{{ prefix }}SetCron('0 0 1 * *')">Monthly</button>
+    </div>
+    <div id="{{ prefix }}-cron-preview" class="cron-preview"></div>
+</div>
+
+<!-- One-time field -->
+<div id="{{ prefix }}-once-fields" style="{{ '' if schedule_type == 'once' else 'display:none' }}">
+    <label for="{{ prefix }}_once_value">Run at</label>
+    <input type="datetime-local" id="{{ prefix }}_once_value"
+           value="{{ schedule_value if schedule_type == 'once' else '' }}">
+</div>
+
+<input type="hidden" id="{{ prefix }}_schedule_value" value="{{ schedule_value }}">
+
+<script>
+(function() {
+    const P = '{{ prefix }}';
+
+    function getType() {
+        return document.querySelector(`input[name="${P}_schedule_type"]:checked`).value;
+    }
+
+    function getCron() {
+        const f = id => document.getElementById(`${P}_cron_${id}`).value.trim() || '*';
+        return `${f('minute')} ${f('hour')} ${f('day')} ${f('month')} ${f('weekday')}`;
+    }
+
+    window[P + 'ToggleSchedule'] = function() {
+        const t = getType();
+        document.getElementById(`${P}-cron-fields`).style.display = t === 'cron' ? '' : 'none';
+        document.getElementById(`${P}-once-fields`).style.display = t === 'once' ? '' : 'none';
+        window[P + 'SyncScheduleValue']();
+    };
+
+    window[P + 'SyncScheduleValue'] = function() {
+        const h = document.getElementById(`${P}_schedule_value`);
+        const t = getType();
+        if (t === 'cron') h.value = getCron();
+        else if (t === 'once') h.value = document.getElementById(`${P}_once_value`).value;
+        else h.value = '';
+    };
+
+    window[P + 'SetCron'] = function(expr) {
+        const parts = expr.split(' ');
+        ['minute','hour','day','month','weekday'].forEach((f, i) => {
+            document.getElementById(`${P}_cron_${f}`).value = parts[i] || '*';
+        });
+        window[P + 'UpdateCronPreview']();
+    };
+
+    let previewTimeout = null;
+    window[P + 'UpdateCronPreview'] = function() {
+        const expr = getCron();
+        document.getElementById(`${P}-cron-expression`).textContent = expr;
+        clearTimeout(previewTimeout);
+        previewTimeout = setTimeout(() => {
+            fetch(`{{ preview_url }}?expr=${encodeURIComponent(expr)}`)
+                .then(r => r.json())
+                .then(data => {
+                    const el = document.getElementById(`${P}-cron-preview`);
+                    if (data.error) {
+                        el.innerHTML = `<span class="cron-preview-error">${data.error}</span>`;
+                    } else {
+                        const items = data.next_runs.map(t => `<li>${t}</li>`).join('');
+                        el.innerHTML = `<div class="cron-preview-label">Next runs:</div><ul class="cron-preview-list">${items}</ul>`;
+                    }
+                }).catch(() => {});
+        }, 300);
+    };
+
+    // Init
+    const onceInput = document.getElementById(`${P}_once_value`);
+    if (onceInput) onceInput.addEventListener('input', window[P + 'SyncScheduleValue']);
+    window[P + 'SyncScheduleValue']();
+    if (getType() === 'cron') window[P + 'UpdateCronPreview']();
+})();
+</script>

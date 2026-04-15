@@ -1,13 +1,16 @@
 import json
 import os
 import subprocess
+import sys
+import tempfile
+import threading
 from datetime import datetime, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
-from mogiri.models import Execution, Job, db
+from mogiri.models import Execution, Job, Setting, Workflow, WorkflowEdge, db
 
 scheduler = BackgroundScheduler()
 _app = None
@@ -16,9 +19,8 @@ _app = None
 def init_scheduler(app):
     global _app
     _app = app
-    sync_jobs(app)
+    sync_all(app)
 
-    # Log rotation: run daily at 03:00
     scheduler.add_job(
         rotate_logs,
         CronTrigger(hour=3, minute=0),
@@ -34,34 +36,38 @@ def shutdown_scheduler():
         scheduler.shutdown(wait=False)
 
 
-def sync_jobs(app):
-    """Load all enabled jobs from DB and register with APScheduler."""
+def sync_all(app):
+    """Load all enabled jobs and workflows and register with APScheduler."""
     with app.app_context():
-        # Remove all existing APScheduler jobs to avoid duplicates
         scheduler.remove_all_jobs()
 
-        jobs = Job.query.filter_by(is_enabled=True).all()
-        for job in jobs:
+        # Register jobs with their own schedules
+        for job in Job.query.filter_by(is_enabled=True).all():
             _add_scheduler_job(job)
 
+        # Register workflows with their own schedules
+        for wf in Workflow.query.filter_by(is_enabled=True).all():
+            _add_scheduler_workflow(wf)
 
-def _make_trigger(job):
-    if job.schedule_type == "cron":
-        return CronTrigger.from_crontab(job.schedule_value)
-    elif job.schedule_type == "once":
-        run_date = datetime.fromisoformat(job.schedule_value)
-        return DateTrigger(run_date=run_date)
+
+def _make_trigger(schedule_type, schedule_value):
+    if schedule_type == "cron" and schedule_value:
+        return CronTrigger.from_crontab(schedule_value)
+    elif schedule_type == "once" and schedule_value:
+        return DateTrigger(run_date=datetime.fromisoformat(schedule_value))
     else:
-        raise ValueError(f"Unknown schedule_type: {job.schedule_type}")
+        return None
 
 
 def _add_scheduler_job(job):
     try:
-        trigger = _make_trigger(job)
+        trigger = _make_trigger(job.schedule_type, job.schedule_value)
+        if trigger is None:
+            return
         scheduler.add_job(
             execute_job,
             trigger=trigger,
-            id=job.id,
+            id=f"job:{job.id}",
             args=[job.id],
             replace_existing=True,
             max_instances=1,
@@ -70,8 +76,24 @@ def _add_scheduler_job(job):
         print(f"Failed to schedule job {job.id} ({job.name}): {e}")
 
 
+def _add_scheduler_workflow(wf):
+    try:
+        trigger = _make_trigger(wf.schedule_type, wf.schedule_value)
+        if trigger is None:
+            return
+        scheduler.add_job(
+            execute_workflow,
+            trigger=trigger,
+            id=f"wf:{wf.id}",
+            args=[wf.id],
+            replace_existing=True,
+            max_instances=1,
+        )
+    except Exception as e:
+        print(f"Failed to schedule workflow {wf.id} ({wf.name}): {e}")
+
+
 def register_job(job):
-    """Register or update a job in the scheduler."""
     if job.is_enabled:
         _add_scheduler_job(job)
     else:
@@ -79,39 +101,123 @@ def register_job(job):
 
 
 def unregister_job(job_id):
-    """Remove a job from the scheduler."""
     try:
-        scheduler.remove_job(job_id)
+        scheduler.remove_job(f"job:{job_id}")
     except Exception:
         pass
 
 
-def execute_job(job_id: str) -> None:
+def register_workflow(wf):
+    if wf.is_enabled:
+        _add_scheduler_workflow(wf)
+    else:
+        unregister_workflow(wf.id)
+
+
+def unregister_workflow(wf_id):
+    try:
+        scheduler.remove_job(f"wf:{wf_id}")
+    except Exception:
+        pass
+
+
+# ---------- Workflow execution ----------
+
+def execute_workflow(workflow_id: str) -> None:
+    """Execute a workflow by running its entry jobs."""
+    app = _app
+    if app is None:
+        return
+
+    with app.app_context():
+        wf = db.session.get(Workflow, workflow_id)
+        if not wf or not wf.is_enabled:
+            return
+
+        entry_ids = set()
+        try:
+            entry_ids = set(json.loads(wf.entry_job_ids or "[]"))
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        if not entry_ids:
+            # Fallback: auto-detect
+            edges = WorkflowEdge.query.filter_by(workflow_id=wf.id).all()
+            target_ids = {e.target_job_id for e in edges}
+            source_ids = {e.source_job_id for e in edges}
+            entry_ids = source_ids - target_ids
+
+        for job_id in entry_ids:
+            thread = threading.Thread(
+                target=execute_job,
+                args=(job_id,),
+                kwargs={"_workflow_id": wf.id},
+            )
+            thread.start()
+
+
+# ---------- Job execution ----------
+
+def execute_job(
+    job_id: str,
+    _workflow_id: str = None,
+    triggered_by_execution_id: str = None,
+    triggered_by_chain_id: str = None,
+    _chain_visited: set = None,
+) -> None:
     """Execute a job's command and record the result."""
     app = _app
     if app is None:
         return
+
+    chain_visited = _chain_visited or {job_id}
 
     with app.app_context():
         job = db.session.get(Job, job_id)
         if not job:
             return
 
-        execution = Execution(job_id=job.id, status="running")
+        execution = Execution(
+            job_id=job.id,
+            status="running",
+            workflow_id=_workflow_id,
+            triggered_by_execution_id=triggered_by_execution_id,
+            triggered_by_chain_id=triggered_by_chain_id,
+        )
         db.session.add(execution)
         db.session.commit()
 
         env = os.environ.copy()
+        # Apply global env vars first
+        try:
+            global_env = json.loads(Setting.get("global_env_vars", "{}"))
+            env.update(global_env)
+        except (json.JSONDecodeError, TypeError):
+            pass
+        # Job-specific vars override global ones
         if job.env_vars:
             try:
                 env.update(json.loads(job.env_vars))
             except (json.JSONDecodeError, TypeError):
                 pass
 
+        tmp_script = None
         try:
+            if job.command_type == "python":
+                tmp_script = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".py", delete=False
+                )
+                tmp_script.write(job.command)
+                tmp_script.close()
+                cmd = [sys.executable, tmp_script.name]
+                shell = False
+            else:
+                cmd = job.command
+                shell = True
+
             result = subprocess.run(
-                job.command,
-                shell=True,
+                cmd,
+                shell=shell,
                 capture_output=True,
                 text=True,
                 timeout=3600,
@@ -131,12 +237,57 @@ def execute_job(job_id: str) -> None:
             execution.status = "failed"
             execution.exit_code = -1
         finally:
+            if tmp_script is not None:
+                try:
+                    os.unlink(tmp_script.name)
+                except OSError:
+                    pass
             execution.finished_at = datetime.now()
             db.session.commit()
 
+            # Only trigger chains when running as part of a workflow
+            if _workflow_id:
+                _trigger_chains(execution, _workflow_id, chain_visited)
+
+
+def _trigger_chains(execution, workflow_id, chain_visited):
+    """After a job finishes within a workflow, trigger chained jobs."""
+    edges = WorkflowEdge.query.filter_by(
+        workflow_id=workflow_id,
+        source_job_id=execution.job_id,
+    ).all()
+
+    for edge in edges:
+        if edge.trigger_condition == "success" and execution.status != "success":
+            continue
+        if edge.trigger_condition == "failure" and execution.status not in (
+            "failed", "timeout",
+        ):
+            continue
+
+        if edge.target_job_id in chain_visited:
+            print(f"[mogiri] Chain cycle detected: skipping {edge.target_job_id}")
+            continue
+
+        target_job = db.session.get(Job, edge.target_job_id)
+        if not target_job:
+            continue
+
+        new_visited = chain_visited | {edge.target_job_id}
+        thread = threading.Thread(
+            target=execute_job,
+            args=(edge.target_job_id,),
+            kwargs={
+                "_workflow_id": workflow_id,
+                "triggered_by_execution_id": execution.id,
+                "triggered_by_chain_id": edge.id,
+                "_chain_visited": new_visited,
+            },
+        )
+        thread.start()
+
 
 def rotate_logs() -> None:
-    """Delete old execution logs based on retention settings."""
     app = _app
     if app is None:
         return
@@ -146,7 +297,6 @@ def rotate_logs() -> None:
         max_per_job = app.config.get("LOG_MAX_PER_JOB", 100)
         deleted = 0
 
-        # Delete executions older than retention_days
         if retention_days > 0:
             cutoff = datetime.now() - timedelta(days=retention_days)
             old = Execution.query.filter(Execution.started_at < cutoff).all()
@@ -154,13 +304,11 @@ def rotate_logs() -> None:
                 db.session.delete(ex)
                 deleted += 1
 
-        # Keep only the latest max_per_job executions per job
         if max_per_job > 0:
             jobs = Job.query.all()
             for job in jobs:
                 excess = (
-                    job.executions
-                    .order_by(Execution.started_at.desc())
+                    job.executions.order_by(Execution.started_at.desc())
                     .offset(max_per_job)
                     .all()
                 )

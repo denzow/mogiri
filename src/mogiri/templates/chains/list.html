@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Workflows - mogiri{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Workflows</h1>
+    <a href="{{ url_for('chains.workflow_new') }}" class="btn btn-primary">+ New Workflow</a>
+</div>
+
+{% if workflows %}
+<div class="card">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Schedule</th>
+                <th>Edges</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for wf in workflows %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('chains.workflow_editor', workflow_id=wf.id) }}">{{ wf.name }}</a>
+                    {% if wf.description %}
+                    <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0.1rem;">{{ wf.description|truncate(60) }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if wf.schedule_type == 'none' or not wf.schedule_type %}
+                    <span style="color: var(--color-text-muted);">Manual</span>
+                    {% else %}
+                    <code class="mono">{{ wf.schedule_value }}</code>
+                    <small style="color: var(--color-text-muted);">{{ wf.schedule_type }}</small>
+                    {% endif %}
+                </td>
+                <td>{{ wf.edges|length }}</td>
+                <td>
+                    <span hx-patch="{{ url_for('chains.workflow_toggle', workflow_id=wf.id) }}"
+                          hx-swap="outerHTML"
+                          class="toggle-btn">
+                        {% if wf.is_enabled %}
+                        <span class="badge badge-enabled">Enabled</span>
+                        {% else %}
+                        <span class="badge badge-disabled">Disabled</span>
+                        {% endif %}
+                    </span>
+                </td>
+                <td>{{ wf.created_at.strftime('%Y-%m-%d %H:%M') if wf.created_at else '-' }}</td>
+                <td>
+                    <div class="actions">
+                        <button hx-post="{{ url_for('chains.workflow_run', workflow_id=wf.id) }}"
+                                hx-swap="none"
+                                class="btn btn-primary btn-sm">Run</button>
+                        <a href="{{ url_for('chains.workflow_editor', workflow_id=wf.id) }}" class="btn btn-sm">Edit</a>
+                        <a href="{{ url_for('chains.chain_history', workflow_id=wf.id) }}" class="btn btn-sm">History</a>
+                        <button hx-delete="{{ url_for('chains.workflow_delete', workflow_id=wf.id) }}"
+                                hx-confirm="Delete this workflow?"
+                                hx-target="body"
+                                class="btn btn-danger btn-sm">Delete</button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">&#128279;</div>
+    <p>No workflows yet.</p>
+    <p><a href="{{ url_for('chains.workflow_new') }}">Create your first workflow</a> to chain jobs together.</p>
+</div>
+{% endif %}
+{% endblock %}

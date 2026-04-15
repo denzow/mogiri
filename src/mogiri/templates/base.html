@@ -22,6 +22,10 @@
                    class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">Dashboard</a>
                 <a href="{{ url_for('jobs.job_list') }}"
                    class="nav-link {% if request.endpoint and request.endpoint.startswith('jobs.') %}active{% endif %}">Jobs</a>
+                <a href="{{ url_for('chains.workflow_list') }}"
+                   class="nav-link {% if request.endpoint and request.endpoint.startswith('chains.') %}active{% endif %}">Chains</a>
+                <a href="{{ url_for('settings.index') }}"
+                   class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}active{% endif %}">Settings</a>
             </div>
         </div>
     </nav>
@@ -30,7 +34,7 @@
         {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         {% for category, message in messages %}
-        <div class="flash flash-{{ category }}">{{ message }}</div>
+        <div class="flash flash-{{ category }}">{{ message|safe }}</div>
         {% endfor %}
         {% endif %}
         {% endwith %}

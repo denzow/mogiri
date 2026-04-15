@@ -3,24 +3,33 @@ import threading
 
 from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
 
+from flask import url_for as _url_for
+
 from mogiri.models import Execution, Job, db
 from mogiri.scheduler import execute_job, register_job, unregister_job
 
 
-def _build_schedule_value(form):
-    """Build schedule_value from form fields depending on schedule_type."""
-    schedule_type = form["schedule_type"]
-    if schedule_type == "cron":
-        parts = [
-            form.get("cron_minute", "*").strip() or "*",
-            form.get("cron_hour", "*").strip() or "*",
-            form.get("cron_day", "*").strip() or "*",
-            form.get("cron_month", "*").strip() or "*",
-            form.get("cron_weekday", "*").strip() or "*",
-        ]
-        return " ".join(parts)
-    else:
-        return form.get("once_value", "") or form.get("schedule_value", "")
+def _schedule_ctx(job):
+    """Build template context variables for the cron_editor partial."""
+    st = job.schedule_type if job else "cron"
+    sv = job.schedule_value if job else ""
+    cron_parts = sv.split() if st == "cron" and sv and len(sv.split()) == 5 else ["*"] * 5
+    return {
+        "prefix": "job",
+        "schedule_type": st or "cron",
+        "schedule_value": sv or "",
+        "cron_parts": cron_parts,
+        "show_none": True,
+        "preview_url": _url_for("jobs.cron_preview"),
+    }
+
+
+def _build_schedule(form, prefix="job"):
+    """Extract schedule_type and schedule_value from form fields."""
+    schedule_type = form.get(f"{prefix}_schedule_type", "cron")
+    # The hidden field has the computed value from JS
+    schedule_value = form.get(f"{prefix}_schedule_value", "")
+    return schedule_type, schedule_value
 
 bp = Blueprint("jobs", __name__, url_prefix="/jobs")
 
@@ -39,13 +48,28 @@ def _parse_env_vars(form):
 
 @bp.route("/")
 def job_list():
-    jobs = Job.query.order_by(Job.created_at.desc()).all()
-    return render_template("jobs/list.html", jobs=jobs)
+    scheduled_jobs = (
+        Job.query.filter(Job.schedule_type.in_(["cron", "once"]))
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    manual_jobs = (
+        Job.query.filter(Job.schedule_type == "none")
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    tab = request.args.get("tab", "scheduled")
+    return render_template(
+        "jobs/list.html",
+        scheduled_jobs=scheduled_jobs,
+        manual_jobs=manual_jobs,
+        tab=tab,
+    )
 
 
 @bp.route("/new")
 def job_new():
-    return render_template("jobs/form.html", job=None)
+    return render_template("jobs/form.html", job=None, **_schedule_ctx(None))
 
 
 @bp.route("/", methods=["POST"])
@@ -53,9 +77,10 @@ def job_create():
     job = Job(
         name=request.form["name"],
         description=request.form.get("description", ""),
+        command_type=request.form.get("command_type", "shell"),
         command=request.form["command"],
-        schedule_type=request.form["schedule_type"],
-        schedule_value=_build_schedule_value(request.form),
+        schedule_type=_build_schedule(request.form)[0],
+        schedule_value=_build_schedule(request.form)[1],
         env_vars=_parse_env_vars(request.form),
         is_enabled="is_enabled" in request.form,
     )
@@ -75,7 +100,9 @@ def job_detail(job_id):
     executions = (
         job.executions.order_by(Execution.started_at.desc()).limit(50).all()
     )
-    return render_template("jobs/detail.html", job=job, executions=executions)
+    return render_template(
+        "jobs/detail.html", job=job, executions=executions,
+    )
 
 
 @bp.route("/<job_id>/executions")
@@ -95,7 +122,7 @@ def job_edit(job_id):
     job = db.session.get(Job, job_id)
     if not job:
         abort(404)
-    return render_template("jobs/form.html", job=job)
+    return render_template("jobs/form.html", job=job, **_schedule_ctx(job))
 
 
 @bp.route("/<job_id>", methods=["POST"])
@@ -106,9 +133,11 @@ def job_update(job_id):
 
     job.name = request.form["name"]
     job.description = request.form.get("description", "")
+    job.command_type = request.form.get("command_type", "shell")
     job.command = request.form["command"]
-    job.schedule_type = request.form["schedule_type"]
-    job.schedule_value = _build_schedule_value(request.form)
+    sched_type, sched_value = _build_schedule(request.form)
+    job.schedule_type = sched_type
+    job.schedule_value = sched_value
     job.env_vars = _parse_env_vars(request.form)
     job.is_enabled = "is_enabled" in request.form
 

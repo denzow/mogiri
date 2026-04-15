@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}New Workflow - mogiri{% endblock %}
+{% block content %}
+<a href="{{ url_for('chains.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
+
+<div class="page-header">
+    <h1>New Workflow</h1>
+</div>
+
+<div class="card form-card">
+    <div class="card-body">
+        <form method="post">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" required placeholder="e.g. Deploy Pipeline">
+
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="2"
+                      placeholder="What this workflow does (optional)"></textarea>
+
+            {% include "partials/cron_editor.html" with context %}
+
+            <div style="margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary" onclick="wfSyncScheduleValue()">Create & Edit</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

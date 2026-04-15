@@ -1,41 +1,31 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - mogiri{% endblock %}
+{% block title %}{% if workflow %}{{ workflow.name }} History{% else %}Chain History{% endif %} - mogiri{% endblock %}
 {% block content %}
+{% if workflow %}
+<a href="{{ url_for('chains.workflow_editor', workflow_id=workflow.id) }}" class="back-link">&larr; Back to {{ workflow.name }}</a>
+{% else %}
+<a href="{{ url_for('chains.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
+{% endif %}
+
 <div class="page-header">
-    <h1>Dashboard</h1>
+    <h1>{% if workflow %}{{ workflow.name }} — Execution History{% else %}Chain Execution History{% endif %}</h1>
 </div>
 
-<div class="stat-grid">
-    <div class="stat-card">
-        <div class="stat-value">{{ total_jobs }}</div>
-        <div class="stat-label">Total Jobs</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ enabled_jobs }}</div>
-        <div class="stat-label">Enabled</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ total_jobs - enabled_jobs }}</div>
-        <div class="stat-label">Disabled</div>
-    </div>
-</div>
-
-<h2 class="section-title">Recent Executions</h2>
-{% if recent_executions %}
+{% if executions %}
 <div class="card">
     <table class="data-table">
         <thead>
             <tr>
                 <th>Job</th>
                 <th>Status</th>
-                <th>Exit Code</th>
+                <th>Triggered By</th>
                 <th>Started</th>
                 <th>Duration</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
-            {% for exec in recent_executions %}
+            {% for exec in executions %}
             <tr>
                 <td><a href="{{ url_for('jobs.job_detail', job_id=exec.job_id) }}">{{ exec.job.name }}</a></td>
                 <td>
@@ -48,12 +38,19 @@
                     {% elif exec.status == 'timeout' %}
                     <span class="badge badge-timeout">Timeout</span>
                     {% endif %}
-                    {% if exec.workflow_id %}
-                    <a href="{{ url_for('chains.workflow_editor', workflow_id=exec.workflow_id) }}"
-                       class="badge badge-chain" style="margin-left: 0.3rem; text-decoration: none;">{{ exec.workflow.name }}</a>
+                    {% if exec.triggered_by_execution_id %}
+                    <span class="badge badge-chain" style="margin-left: 0.3rem;">chain</span>
                     {% endif %}
                 </td>
-                <td class="mono">{{ exec.exit_code if exec.exit_code is not none else '-' }}</td>
+                <td>
+                    {% if exec.parent_execution %}
+                    <a href="{{ url_for('executions.execution_detail', execution_id=exec.triggered_by_execution_id) }}">
+                        {{ exec.parent_execution.job.name }}
+                    </a>
+                    {% else %}
+                    <span style="color: var(--color-text-muted);">entry</span>
+                    {% endif %}
+                </td>
                 <td>{{ exec.started_at.strftime('%Y-%m-%d %H:%M:%S') if exec.started_at else '-' }}</td>
                 <td>
                     {% if exec.finished_at and exec.started_at %}
@@ -68,9 +65,8 @@
 </div>
 {% else %}
 <div class="empty-state">
-    <div class="empty-icon">&#9744;</div>
-    <p>No executions yet.</p>
-    <p><a href="{{ url_for('jobs.job_list') }}">Create a job</a> to get started.</p>
+    <div class="empty-icon">&#128279;</div>
+    <p>No executions yet. Run the workflow to see results here.</p>
 </div>
 {% endif %}
 {% endblock %}

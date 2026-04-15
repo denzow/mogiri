@@ -1,0 +1,350 @@
+{% extends "base.html" %}
+{% block title %}{{ workflow.name }} - mogiri{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@0.0.59/dist/drawflow.min.css">
+
+<a href="{{ url_for('chains.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
+
+<div class="page-header">
+    <h1>{{ workflow.name }}</h1>
+    <div class="actions">
+        <button hx-post="{{ url_for('chains.workflow_run', workflow_id=workflow.id) }}"
+                hx-swap="none"
+                class="btn btn-primary btn-sm">Run</button>
+        <a href="{{ url_for('chains.chain_history', workflow_id=workflow.id) }}" class="btn btn-sm">History</a>
+        <button id="save-btn" class="btn btn-sm" style="border-color: var(--color-primary); color: var(--color-primary);">Save</button>
+    </div>
+</div>
+
+{% if workflow.description %}
+<p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 0.75rem;">{{ workflow.description }}</p>
+{% endif %}
+
+<div class="card form-card" style="margin-bottom: 1rem;">
+    <div class="card-body">
+        {% include "partials/cron_editor.html" with context %}
+    </div>
+</div>
+
+<p style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 1rem;">
+    Connect the <strong>Start</strong> node to entry jobs. Click a label to toggle:
+    <span class="badge badge-chain-success">success</span>
+    <span class="badge badge-chain-failure">failure</span>
+    <span class="badge badge-chain-any">any</span>
+    &mdash; Select + <kbd>Delete</kbd> to remove.
+</p>
+
+{% if not jobs_data %}
+<div class="empty-state">
+    <div class="empty-icon">&#128279;</div>
+    <p>No jobs available.</p>
+    <p><a href="{{ url_for('jobs.job_new') }}">Create some jobs</a> first.</p>
+</div>
+{% else %}
+<div class="editor-layout">
+    <div class="editor-sidebar">
+        <div class="editor-sidebar-header">Jobs</div>
+        <input type="text" id="job-search" placeholder="Filter..." class="editor-sidebar-search">
+        <div id="job-palette" class="editor-sidebar-list"></div>
+    </div>
+    <div class="card editor-canvas-card">
+        <div id="drawflow" style="width: 100%; height: 600px;"></div>
+        <div id="condition-labels" style="position: absolute; top: 0; left: 0; pointer-events: none; width: 100%; height: 100%;"></div>
+    </div>
+</div>
+
+<div id="save-feedback" class="flash flash-success" style="display: none; position: fixed; top: 70px; right: 2rem; z-index: 200;">
+    Saved!
+</div>
+
+<script src="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@0.0.59/dist/drawflow.min.js"></script>
+<script>
+const container = document.getElementById('drawflow');
+const editor = new Drawflow(container);
+editor.reroute = true;
+editor.start();
+
+const allJobs = {{ jobs_data | tojson }};
+const existingEdges = {{ edges_data | tojson }};
+const existingNodePositions = {{ node_positions | tojson }};
+const existingEntryJobIds = {{ entry_job_ids | tojson }};
+const startNodePos = {x: {{ start_node_x }}, y: {{ start_node_y }}};
+
+const jobMap = {};
+allJobs.forEach(j => jobMap[j.id] = j);
+
+const nodeKeyToDrawflow = {};
+const drawflowToNodeKey = {};
+const drawflowToJobId = {};
+const instanceCounters = {};
+const connectionConditions = new Map();
+const CONDITIONS = ['success', 'failure', 'any'];
+
+let START_NODE_ID = null;
+
+function nextNodeKey(jobId) {
+    if (!(jobId in instanceCounters)) instanceCounters[jobId] = 0;
+    const key = `${jobId}:${instanceCounters[jobId]}`;
+    instanceCounters[jobId]++;
+    return key;
+}
+
+// --- Start node ---
+function addStartNode(x, y) {
+    const html = `<div class="chain-node chain-node-start">
+        <div class="chain-node-name">Start</div>
+    </div>`;
+    START_NODE_ID = editor.addNode(
+        '__start__', 0, 1, x, y, 'chain-node-start-wrap', {is_start: true}, html
+    );
+}
+addStartNode(startNodePos.x, startNodePos.y);
+
+// --- Palette ---
+function renderPalette() {
+    const palette = document.getElementById('job-palette');
+    const filter = document.getElementById('job-search').value.toLowerCase();
+    palette.innerHTML = '';
+    allJobs
+        .filter(j => !filter || j.name.toLowerCase().includes(filter))
+        .forEach(job => {
+            const item = document.createElement('div');
+            item.className = 'palette-item';
+            const badgeClass = job.command_type === 'python' ? 'badge-python' : 'badge-shell';
+            item.innerHTML = `
+                <span class="palette-item-name">${escapeHtml(job.name)}</span>
+                <span class="badge ${badgeClass}" style="font-size:0.55rem;">${job.command_type}</span>
+            `;
+            item.addEventListener('click', () => addJobNode(job.id));
+            palette.appendChild(item);
+        });
+}
+document.getElementById('job-search').addEventListener('input', renderPalette);
+
+// --- Add job node ---
+let placeX = 350, placeY = 100;
+
+function addJobNode(jobId, x, y, nodeKey) {
+    const job = jobMap[jobId];
+    if (!job) return null;
+    const nk = nodeKey || nextNodeKey(jobId);
+    const posX = x !== undefined ? x : placeX;
+    const posY = y !== undefined ? y : placeY;
+    placeX += 40; placeY += 40;
+    if (placeY > 500) { placeY = 100; placeX += 200; }
+
+    const badgeClass = job.command_type === 'python' ? 'badge-python' : 'badge-shell';
+    const html = `<div class="chain-node">
+        <div class="chain-node-name">${escapeHtml(job.name)}</div>
+        <div class="badge ${badgeClass}" style="font-size:0.6rem;">${job.command_type}</div>
+    </div>`;
+    const nodeId = editor.addNode(
+        nk, 1, 1, posX, posY, 'chain-node-wrap', {job_id: jobId, node_key: nk}, html
+    );
+    nodeKeyToDrawflow[nk] = nodeId;
+    drawflowToNodeKey[nodeId] = nk;
+    drawflowToJobId[nodeId] = jobId;
+    if (nodeKey) {
+        const idx = parseInt((nodeKey.split(':')[1]) || '0', 10);
+        if (!instanceCounters[jobId] || instanceCounters[jobId] <= idx)
+            instanceCounters[jobId] = idx + 1;
+    }
+    return nodeId;
+}
+
+editor.on('nodeRemoved', function(nodeId) {
+    if (nodeId === START_NODE_ID) {
+        // Re-add Start node if deleted
+        setTimeout(() => addStartNode(50, 250), 100);
+        return;
+    }
+    const nk = drawflowToNodeKey[nodeId];
+    if (nk) {
+        delete nodeKeyToDrawflow[nk];
+        delete drawflowToNodeKey[nodeId];
+        delete drawflowToJobId[nodeId];
+        for (const key of [...connectionConditions.keys()])
+            if (key.includes(nk)) connectionConditions.delete(key);
+        setTimeout(updateConditionLabels, 50);
+    }
+});
+
+// --- Restore saved state ---
+existingNodePositions.forEach(np => addJobNode(np.job_id, np.x, np.y, np.node_key));
+
+// Restore edges between job nodes
+existingEdges.forEach(edge => {
+    const srcNodes = Object.entries(drawflowToJobId)
+        .filter(([_, jid]) => jid === edge.source_job_id).map(([n]) => parseInt(n));
+    const tgtNodes = Object.entries(drawflowToJobId)
+        .filter(([_, jid]) => jid === edge.target_job_id).map(([n]) => parseInt(n));
+    if (srcNodes.length && tgtNodes.length) {
+        editor.addConnection(srcNodes[0], tgtNodes[0], 'output_1', 'input_1');
+        connectionConditions.set(
+            `${drawflowToNodeKey[srcNodes[0]]}->${drawflowToNodeKey[tgtNodes[0]]}`,
+            edge.trigger_condition
+        );
+    }
+});
+
+// Restore Start node connections
+existingEntryJobIds.forEach(jobId => {
+    const tgtNodes = Object.entries(drawflowToJobId)
+        .filter(([_, jid]) => jid === jobId).map(([n]) => parseInt(n));
+    if (tgtNodes.length && START_NODE_ID) {
+        editor.addConnection(START_NODE_ID, tgtNodes[0], 'output_1', 'input_1');
+    }
+});
+
+renderPalette();
+
+// --- Condition labels (only for job-to-job connections, not Start) ---
+function getConnectionInfo(connEl) {
+    let srcId = null, tgtId = null;
+    connEl.classList.forEach(cls => {
+        const out = cls.match(/^node_out_node-(\d+)$/);
+        const inp = cls.match(/^node_in_node-(\d+)$/);
+        if (out) srcId = parseInt(out[1]);
+        if (inp) tgtId = parseInt(inp[1]);
+    });
+    if (!srcId || !tgtId) return null;
+    const isStartConn = (srcId === START_NODE_ID);
+    const srcKey = drawflowToNodeKey[srcId];
+    const tgtKey = drawflowToNodeKey[tgtId];
+    return {srcId, tgtId, srcKey, tgtKey, isStartConn};
+}
+
+function updateConditionLabels() {
+    const labelsEl = document.getElementById('condition-labels');
+    labelsEl.innerHTML = '';
+    container.querySelectorAll('.connection .main-path').forEach(path => {
+        const connEl = path.closest('.connection');
+        if (!connEl) return;
+        const info = getConnectionInfo(connEl);
+        if (!info || info.isStartConn) return;  // Skip Start connections
+        if (!info.srcKey || !info.tgtKey) return;
+        const condKey = `${info.srcKey}->${info.tgtKey}`;
+        const condition = connectionConditions.get(condKey) || 'success';
+        try {
+            const mid = path.getPointAtLength(path.getTotalLength() / 2);
+            const tag = document.createElement('div');
+            tag.className = 'chain-condition-tag';
+            tag.setAttribute('data-condition', condition);
+            tag.textContent = condition;
+            tag.style.position = 'absolute';
+            tag.style.left = mid.x + 'px';
+            tag.style.top = mid.y + 'px';
+            tag.style.pointerEvents = 'auto';
+            tag.style.cursor = 'pointer';
+            tag.addEventListener('click', () => {
+                const cur = connectionConditions.get(condKey) || 'success';
+                connectionConditions.set(condKey, CONDITIONS[(CONDITIONS.indexOf(cur) + 1) % 3]);
+                updateConditionLabels();
+            });
+            labelsEl.appendChild(tag);
+        } catch(e) {}
+    });
+}
+
+editor.on('connectionCreated', function(info) {
+    if (info.output_id === START_NODE_ID) return;  // Start connections have no condition
+    const srcKey = drawflowToNodeKey[info.output_id];
+    const tgtKey = drawflowToNodeKey[info.input_id];
+    if (srcKey && tgtKey) {
+        const ck = `${srcKey}->${tgtKey}`;
+        if (!connectionConditions.has(ck)) connectionConditions.set(ck, 'success');
+    }
+    setTimeout(updateConditionLabels, 50);
+});
+editor.on('connectionRemoved', function(info) {
+    if (info.output_id === START_NODE_ID) return;
+    const srcKey = drawflowToNodeKey[info.output_id];
+    const tgtKey = drawflowToNodeKey[info.input_id];
+    if (srcKey && tgtKey) connectionConditions.delete(`${srcKey}->${tgtKey}`);
+    setTimeout(updateConditionLabels, 50);
+});
+editor.on('nodeMoved', () => setTimeout(updateConditionLabels, 50));
+setTimeout(updateConditionLabels, 200);
+
+// --- Save ---
+document.getElementById('save-btn').addEventListener('click', () => {
+    const exportData = editor.export();
+    const connections = [];
+    const nodePositions = [];
+    const entryJobIds = [];
+    let startNode = {x: 50, y: 250};
+
+    const moduleData = exportData.drawflow.Home.data;
+    for (const [nodeId, node] of Object.entries(moduleData)) {
+        // Start node
+        if (node.data.is_start) {
+            startNode = {x: node.pos_x, y: node.pos_y};
+            // Connections from Start → entry jobs
+            for (const outConns of Object.values(node.outputs)) {
+                for (const conn of outConns.connections) {
+                    const tgt = moduleData[conn.node];
+                    if (tgt && tgt.data.job_id) entryJobIds.push(tgt.data.job_id);
+                }
+            }
+            continue;
+        }
+
+        const jobId = node.data.job_id;
+        const nodeKey = node.data.node_key;
+        nodePositions.push({job_id: jobId, node_key: nodeKey, x: node.pos_x, y: node.pos_y});
+
+        for (const outConns of Object.values(node.outputs)) {
+            for (const conn of outConns.connections) {
+                const tgt = moduleData[conn.node];
+                if (!tgt || tgt.data.is_start) continue;
+                const tgtJobId = tgt.data.job_id;
+                const condKey = `${nodeKey}->${tgt.data.node_key}`;
+                connections.push({
+                    source_job_id: jobId,
+                    target_job_id: tgtJobId,
+                    trigger_condition: connectionConditions.get(condKey) || 'success',
+                });
+            }
+        }
+    }
+
+    // Sync schedule value before saving
+    wfSyncScheduleValue();
+    const scheduleType = document.querySelector('input[name="wf_schedule_type"]:checked').value;
+    const scheduleValue = document.getElementById('wf_schedule_value').value;
+
+    fetch('{{ url_for("chains.workflow_save", workflow_id=workflow.id) }}', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            connections,
+            node_positions: nodePositions,
+            entry_job_ids: [...new Set(entryJobIds)],
+            start_node: startNode,
+            schedule_type: scheduleType,
+            schedule_value: scheduleValue,
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        const fb = document.getElementById('save-feedback');
+        if (data.error) {
+            fb.textContent = data.error;
+            fb.className = 'flash flash-error';
+        } else {
+            fb.textContent = 'Saved!';
+            fb.className = 'flash flash-success';
+        }
+        fb.style.display = 'block';
+        setTimeout(() => fb.style.display = 'none', 2000);
+    });
+});
+
+function escapeHtml(text) {
+    const d = document.createElement('div');
+    d.textContent = text;
+    return d.innerHTML;
+}
+</script>
+{% endif %}
+{% endblock %}

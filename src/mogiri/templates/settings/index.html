@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Settings - mogiri{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Settings</h1>
+</div>
+
+<div class="card form-card">
+    <div class="card-header">Global Environment Variables</div>
+    <div class="card-body">
+        <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 1.25rem;">
+            These variables are applied to all job executions. Job-specific variables override global ones.
+        </p>
+        <form method="post" action="{{ url_for('settings.update') }}">
+            <div id="env-vars-container">
+                {% for key, value in env_vars.items() %}
+                <div class="env-var-row">
+                    <input type="text" name="env_key" value="{{ key }}" placeholder="KEY">
+                    <input type="text" name="env_value" value="{{ value }}" placeholder="VALUE">
+                    <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
+                </div>
+                {% endfor %}
+            </div>
+            <button type="button" onclick="addEnvVar()" class="btn btn-sm" style="margin-bottom: 1.5rem;">
+                + Add Variable
+            </button>
+
+            <div>
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function addEnvVar() {
+    const container = document.getElementById('env-vars-container');
+    const row = document.createElement('div');
+    row.className = 'env-var-row';
+    row.innerHTML = `
+        <input type="text" name="env_key" placeholder="KEY">
+        <input type="text" name="env_value" placeholder="VALUE">
+        <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
+    `;
+    container.appendChild(row);
+}
+</script>
+{% endblock %}

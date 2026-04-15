@@ -1,4 +1,4 @@
-from mogiri.models import Job, db as _db
+from mogiri.models import Execution, Job, Workflow, db as _db
 
 
 def test_dashboard(client):
@@ -10,7 +10,7 @@ def test_dashboard(client):
 def test_job_list_empty(client):
     response = client.get("/jobs/")
     assert response.status_code == 200
-    assert b"No jobs yet" in response.data
+    assert b"No scheduled jobs yet" in response.data
 
 
 def test_job_create_and_view(client, app):
@@ -113,3 +113,43 @@ def test_job_new_form(client):
     response = client.get("/jobs/new")
     assert response.status_code == 200
     assert b"New Job" in response.data
+
+
+def _create_workflow_execution(app):
+    """Helper: create a job, workflow, and an execution linked to the workflow."""
+    with app.app_context():
+        job = Job(
+            name="WF Job",
+            command="echo wf",
+            schedule_type="none",
+        )
+        wf = Workflow(name="Test Workflow")
+        _db.session.add(job)
+        _db.session.add(wf)
+        _db.session.flush()
+
+        execution = Execution(
+            job_id=job.id,
+            workflow_id=wf.id,
+            status="success",
+            exit_code=0,
+        )
+        _db.session.add(execution)
+        _db.session.commit()
+        return job.id, wf.id, execution.id
+
+
+def test_dashboard_with_workflow_execution(client, app):
+    """Dashboard must render correctly when executions are linked to a workflow."""
+    _create_workflow_execution(app)
+    response = client.get("/")
+    assert response.status_code == 200
+    assert b"Test Workflow" in response.data
+
+
+def test_job_detail_with_workflow_execution(client, app):
+    """Job detail page must render correctly when executions are linked to a workflow."""
+    job_id, _, _ = _create_workflow_execution(app)
+    response = client.get(f"/jobs/{job_id}")
+    assert response.status_code == 200
+    assert b"Test Workflow" in response.data

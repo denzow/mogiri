@@ -15,6 +15,15 @@
         <dl class="detail-grid">
             <dt>Job</dt>
             <dd><a href="{{ url_for('jobs.job_detail', job_id=execution.job_id) }}">{{ execution.job.name }}</a></dd>
+            {% if execution.triggered_by_execution_id %}
+            <dt>Triggered By</dt>
+            <dd>
+                <a href="{{ url_for('executions.execution_detail', execution_id=execution.triggered_by_execution_id) }}">
+                    {{ execution.parent_execution.job.name }}
+                </a>
+                <span class="badge badge-running" style="margin-left: 0.3rem;">chain</span>
+            </dd>
+            {% endif %}
             <dt>Status</dt>
             <dd>
                 {% if execution.status == 'success' %}

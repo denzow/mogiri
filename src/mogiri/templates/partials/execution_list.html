@@ -23,6 +23,10 @@
                     {% elif exec.status == 'timeout' %}
                     <span class="badge badge-timeout">Timeout</span>
                     {% endif %}
+                    {% if exec.workflow_id %}
+                    <a href="{{ url_for('chains.workflow_editor', workflow_id=exec.workflow_id) }}"
+                       class="badge badge-chain" style="margin-left: 0.3rem; text-decoration: none;">{{ exec.workflow.name }}</a>
+                    {% endif %}
                 </td>
                 <td class="mono">{{ exec.exit_code if exec.exit_code is not none else '-' }}</td>
                 <td>{{ exec.started_at.strftime('%Y-%m-%d %H:%M:%S') if exec.started_at else '-' }}</td>

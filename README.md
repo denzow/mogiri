@@ -19,11 +19,6 @@
 ## Installation
 
 ```bash
-# pyenvの場合
-pyenv virtualenv 3.12.11 mogiri
-pyenv local mogiri
-
-# インストール
 pip install -e .
 ```
 
@@ -103,6 +98,20 @@ pytest tests/ -v
 # Lint
 ruff check src/ tests/
 ```
+
+### DBマイグレーション
+
+スキーマ変更時は Flask-Migrate (Alembic) でマイグレーションを管理します。
+
+```bash
+# モデル変更後にマイグレーションファイルを生成
+FLASK_APP=mogiri.app flask db migrate -m "add new column"
+
+# マイグレーションを適用
+FLASK_APP=mogiri.app flask db upgrade
+```
+
+`mogiri serve` 起動時に未適用のマイグレーションは自動で適用されます。
 
 ## Data
 

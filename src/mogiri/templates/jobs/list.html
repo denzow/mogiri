@@ -6,12 +6,28 @@
     <a href="{{ url_for('jobs.job_new') }}" class="btn btn-primary">+ New Job</a>
 </div>
 
+<div class="tabs">
+    <a href="{{ url_for('jobs.job_list', tab='scheduled') }}"
+       class="tab {% if tab == 'scheduled' %}active{% endif %}">
+        Scheduled
+        <span class="tab-count">{{ scheduled_jobs|length }}</span>
+    </a>
+    <a href="{{ url_for('jobs.job_list', tab='manual') }}"
+       class="tab {% if tab == 'manual' %}active{% endif %}">
+        Manual
+        <span class="tab-count">{{ manual_jobs|length }}</span>
+    </a>
+</div>
+
+{% set jobs = scheduled_jobs if tab == 'scheduled' else manual_jobs %}
+
 {% if jobs %}
 <div class="card">
     <table class="data-table">
         <thead>
             <tr>
                 <th>Name</th>
+                <th>Type</th>
                 <th>Schedule</th>
                 <th>Status</th>
                 <th>Created</th>
@@ -28,8 +44,15 @@
                     {% endif %}
                 </td>
                 <td>
+                    <span class="badge {% if job.command_type == 'python' %}badge-python{% else %}badge-shell{% endif %}">{{ job.command_type|capitalize }}</span>
+                </td>
+                <td>
+                    {% if job.schedule_type == 'none' %}
+                    <span style="color: var(--color-text-muted);">Manual / Chain</span>
+                    {% else %}
                     <code class="mono">{{ job.schedule_value }}</code>
-                    <small style="color: var(--mogiri-text-muted); margin-left: 0.3rem;">{{ job.schedule_type }}</small>
+                    <small style="color: var(--color-text-muted); margin-left: 0.3rem;">{{ job.schedule_type }}</small>
+                    {% endif %}
                 </td>
                 <td>
                     <span hx-patch="{{ url_for('jobs.job_toggle', job_id=job.id) }}"
@@ -61,8 +84,12 @@
 {% else %}
 <div class="empty-state">
     <div class="empty-icon">&#128203;</div>
-    <p>No jobs yet.</p>
-    <p><a href="{{ url_for('jobs.job_new') }}">Create your first job</a> to get started.</p>
+    {% if tab == 'scheduled' %}
+    <p>No scheduled jobs yet.</p>
+    {% else %}
+    <p>No manual jobs yet.</p>
+    {% endif %}
+    <p><a href="{{ url_for('jobs.job_new') }}">Create a new job</a> to get started.</p>
 </div>
 {% endif %}
 {% endblock %}

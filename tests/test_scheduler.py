@@ -71,6 +71,52 @@ def test_execute_job_with_env_vars(app):
         assert "test_value" in execution.stdout
 
 
+def test_execute_python_job(app):
+    with app.app_context():
+        job = Job(
+            name="python test",
+            command_type="python",
+            command="import sys\nprint(f'python {sys.version_info.major}')",
+            schedule_type="cron",
+            schedule_value="* * * * *",
+        )
+        _db.session.add(job)
+        _db.session.commit()
+        job_id = job.id
+
+    execute_job(job_id)
+
+    with app.app_context():
+        execution = Execution.query.filter_by(job_id=job_id).first()
+        assert execution is not None
+        assert execution.status == "success"
+        assert execution.exit_code == 0
+        assert "python 3" in execution.stdout
+
+
+def test_execute_python_job_with_error(app):
+    with app.app_context():
+        job = Job(
+            name="python error test",
+            command_type="python",
+            command="raise ValueError('test error')",
+            schedule_type="cron",
+            schedule_value="* * * * *",
+        )
+        _db.session.add(job)
+        _db.session.commit()
+        job_id = job.id
+
+    execute_job(job_id)
+
+    with app.app_context():
+        execution = Execution.query.filter_by(job_id=job_id).first()
+        assert execution is not None
+        assert execution.status == "failed"
+        assert execution.exit_code == 1
+        assert "ValueError" in execution.stderr
+
+
 def test_execute_job_nonexistent(app):
     """Executing a nonexistent job should not raise."""
     execute_job("nonexistent-id")

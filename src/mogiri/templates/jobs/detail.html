@@ -29,10 +29,24 @@
     <div class="card-header">Configuration</div>
     <div class="card-body">
         <dl class="detail-grid">
+            <dt>Type</dt>
+            <dd><span class="badge {% if job.command_type == 'python' %}badge-python{% else %}badge-shell{% endif %}">{{ job.command_type|capitalize }}</span></dd>
             <dt>Command</dt>
-            <dd><code>{{ job.command }}</code></dd>
+            <dd>
+                {% if job.command_type == 'python' %}
+                <pre class="log-output" style="margin: 0;">{{ job.command }}</pre>
+                {% else %}
+                <code>{{ job.command }}</code>
+                {% endif %}
+            </dd>
             <dt>Schedule</dt>
-            <dd><code>{{ job.schedule_value }}</code> ({{ job.schedule_type }})</dd>
+            <dd>
+                {% if job.schedule_type == 'none' %}
+                <span style="color: var(--color-text-muted);">Manual / Chain only</span>
+                {% else %}
+                <code>{{ job.schedule_value }}</code> ({{ job.schedule_type }})
+                {% endif %}
+            </dd>
             <dt>Status</dt>
             <dd>
                 {% if job.is_enabled %}
