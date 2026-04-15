@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Execution - mogiri{% endblock %}
+{% block content %}
+<a href="{{ url_for('jobs.job_detail', job_id=execution.job_id) }}" class="back-link">
+    &larr; Back to {{ execution.job.name }}
+</a>
+
+<div class="page-header">
+    <h1>Execution Detail</h1>
+</div>
+
+<div class="card">
+    <div class="card-header">Summary</div>
+    <div class="card-body">
+        <dl class="detail-grid">
+            <dt>Job</dt>
+            <dd><a href="{{ url_for('jobs.job_detail', job_id=execution.job_id) }}">{{ execution.job.name }}</a></dd>
+            <dt>Status</dt>
+            <dd>
+                {% if execution.status == 'success' %}
+                <span class="badge badge-success">Success</span>
+                {% elif execution.status == 'failed' %}
+                <span class="badge badge-failed">Failed</span>
+                {% elif execution.status == 'running' %}
+                <span class="badge badge-running">Running</span>
+                {% elif execution.status == 'timeout' %}
+                <span class="badge badge-timeout">Timeout</span>
+                {% endif %}
+            </dd>
+            <dt>Exit Code</dt>
+            <dd class="mono">{{ execution.exit_code if execution.exit_code is not none else '-' }}</dd>
+            <dt>Started</dt>
+            <dd>{{ execution.started_at.strftime('%Y-%m-%d %H:%M:%S') if execution.started_at else '-' }}</dd>
+            <dt>Finished</dt>
+            <dd>{{ execution.finished_at.strftime('%Y-%m-%d %H:%M:%S') if execution.finished_at else '-' }}</dd>
+            {% if execution.finished_at and execution.started_at %}
+            <dt>Duration</dt>
+            <dd>{{ (execution.finished_at - execution.started_at).total_seconds()|round(1) }}s</dd>
+            {% endif %}
+        </dl>
+    </div>
+</div>
+
+{% if execution.stdout %}
+<div class="log-label">stdout</div>
+<pre class="log-output">{{ execution.stdout }}</pre>
+{% endif %}
+
+{% if execution.stderr %}
+<div class="log-label">stderr</div>
+<pre class="log-output">{{ execution.stderr }}</pre>
+{% endif %}
+
+{% if not execution.stdout and not execution.stderr %}
+<div class="empty-state">
+    <div class="empty-icon">&#128196;</div>
+    <p>No output captured.</p>
+</div>
+{% endif %}
+{% endblock %}

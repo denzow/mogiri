@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Jobs - mogiri{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Jobs</h1>
+    <a href="{{ url_for('jobs.job_new') }}" class="btn btn-primary">+ New Job</a>
+</div>
+
+{% if jobs %}
+<div class="card">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Schedule</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for job in jobs %}
+            <tr>
+                <td>
+                    <a href="{{ url_for('jobs.job_detail', job_id=job.id) }}">{{ job.name }}</a>
+                    {% if job.description %}
+                    <div style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0.1rem;">{{ job.description|truncate(60) }}</div>
+                    {% endif %}
+                </td>
+                <td>
+                    <code class="mono">{{ job.schedule_value }}</code>
+                    <small style="color: var(--mogiri-text-muted); margin-left: 0.3rem;">{{ job.schedule_type }}</small>
+                </td>
+                <td>
+                    <span hx-patch="{{ url_for('jobs.job_toggle', job_id=job.id) }}"
+                          hx-swap="outerHTML"
+                          class="toggle-btn">
+                        {% if job.is_enabled %}
+                        <span class="badge badge-enabled">Enabled</span>
+                        {% else %}
+                        <span class="badge badge-disabled">Disabled</span>
+                        {% endif %}
+                    </span>
+                </td>
+                <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M') if job.created_at else '-' }}</td>
+                <td>
+                    <div class="actions">
+                        <a href="{{ url_for('jobs.job_edit', job_id=job.id) }}" class="btn btn-sm">Edit</a>
+                        <button hx-post="{{ url_for('jobs.job_run', job_id=job.id) }}"
+                                hx-swap="none"
+                                class="btn btn-sm">
+                            Run
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">&#128203;</div>
+    <p>No jobs yet.</p>
+    <p><a href="{{ url_for('jobs.job_new') }}">Create your first job</a> to get started.</p>
+</div>
+{% endif %}
+{% endblock %}

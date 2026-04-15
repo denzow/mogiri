@@ -1,0 +1,45 @@
+{% if executions %}
+<div class="card">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Status</th>
+                <th>Exit Code</th>
+                <th>Started</th>
+                <th>Duration</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exec in executions %}
+            <tr>
+                <td>
+                    {% if exec.status == 'success' %}
+                    <span class="badge badge-success">Success</span>
+                    {% elif exec.status == 'failed' %}
+                    <span class="badge badge-failed">Failed</span>
+                    {% elif exec.status == 'running' %}
+                    <span class="badge badge-running">Running</span>
+                    {% elif exec.status == 'timeout' %}
+                    <span class="badge badge-timeout">Timeout</span>
+                    {% endif %}
+                </td>
+                <td class="mono">{{ exec.exit_code if exec.exit_code is not none else '-' }}</td>
+                <td>{{ exec.started_at.strftime('%Y-%m-%d %H:%M:%S') if exec.started_at else '-' }}</td>
+                <td>
+                    {% if exec.finished_at and exec.started_at %}
+                    {{ (exec.finished_at - exec.started_at).total_seconds()|round(1) }}s
+                    {% else %}-{% endif %}
+                </td>
+                <td><a href="{{ url_for('executions.execution_detail', execution_id=exec.id) }}" class="btn btn-sm">Log</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-icon">&#9744;</div>
+    <p>No executions yet.</p>
+</div>
+{% endif %}

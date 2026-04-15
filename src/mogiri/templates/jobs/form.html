@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit' if job else 'New' }} Job - mogiri{% endblock %}
+
+{% set cron_parts = job.schedule_value.split() if job and job.schedule_type == 'cron' and job.schedule_value.split()|length == 5 else ['*','*','*','*','*'] %}
+
+{% block content %}
+<a href="{{ url_for('jobs.job_detail', job_id=job.id) if job else url_for('jobs.job_list') }}" class="back-link">
+    &larr; {{ 'Back to ' + job.name if job else 'Back to Jobs' }}
+</a>
+
+<div class="page-header">
+    <h1>{{ 'Edit Job' if job else 'New Job' }}</h1>
+</div>
+
+<div class="card form-card">
+    <div class="card-body">
+        <form method="post" action="{{ url_for('jobs.job_update', job_id=job.id) if job else url_for('jobs.job_create') }}">
+            <label for="name">Name</label>
+            <input type="text" id="name" name="name" value="{{ job.name if job else '' }}" required
+                   placeholder="My backup job">
+
+            <label for="description">Description</label>
+            <textarea id="description" name="description" rows="2"
+                      placeholder="What this job does (optional)">{{ job.description if job else '' }}</textarea>
+
+            <label for="command">Command</label>
+            <input type="text" id="command" name="command" value="{{ job.command if job else '' }}" required
+                   placeholder="e.g. echo hello">
+
+            <label>Schedule Type</label>
+            <div class="schedule-radios">
+                <label>
+                    <input type="radio" name="schedule_type" value="cron"
+                           {{ 'checked' if not job or job.schedule_type == 'cron' else '' }}
+                           onchange="toggleScheduleType()">
+                    Cron
+                </label>
+                <label>
+                    <input type="radio" name="schedule_type" value="once"
+                           {{ 'checked' if job and job.schedule_type == 'once' else '' }}
+                           onchange="toggleScheduleType()">
+                    One-time
+                </label>
+            </div>
+
+            <!-- Cron fields -->
+            <div id="cron-fields" class="cron-editor"
+                 style="{{ 'display:none' if job and job.schedule_type == 'once' else '' }}">
+                <div class="cron-grid">
+                    <div class="cron-field">
+                        <label for="cron_minute">Minute</label>
+                        <input type="text" id="cron_minute" name="cron_minute"
+                               value="{{ cron_parts[0] }}" placeholder="*"
+                               oninput="updateCronPreview()">
+                        <div class="cron-hint">0-59</div>
+                    </div>
+                    <div class="cron-field">
+                        <label for="cron_hour">Hour</label>
+                        <input type="text" id="cron_hour" name="cron_hour"
+                               value="{{ cron_parts[1] }}" placeholder="*"
+                               oninput="updateCronPreview()">
+                        <div class="cron-hint">0-23</div>
+                    </div>
+                    <div class="cron-field">
+                        <label for="cron_day">Day</label>
+                        <input type="text" id="cron_day" name="cron_day"
+                               value="{{ cron_parts[2] }}" placeholder="*"
+                               oninput="updateCronPreview()">
+                        <div class="cron-hint">1-31</div>
+                    </div>
+                    <div class="cron-field">
+                        <label for="cron_month">Month</label>
+                        <input type="text" id="cron_month" name="cron_month"
+                               value="{{ cron_parts[3] }}" placeholder="*"
+                               oninput="updateCronPreview()">
+                        <div class="cron-hint">1-12</div>
+                    </div>
+                    <div class="cron-field">
+                        <label for="cron_weekday">Weekday</label>
+                        <input type="text" id="cron_weekday" name="cron_weekday"
+                               value="{{ cron_parts[4] }}" placeholder="*"
+                               oninput="updateCronPreview()">
+                        <div class="cron-hint">0-6 (Mon-Sun)</div>
+                    </div>
+                </div>
+                <div class="cron-expression-row">
+                    <span class="cron-expression-label">Expression:</span>
+                    <code id="cron-expression" class="mono">{{ cron_parts | join(' ') }}</code>
+                </div>
+                <div class="cron-presets">
+                    <span class="cron-presets-label">Presets:</span>
+                    <button type="button" class="btn btn-sm" onclick="setCron('* * * * *')">Every min</button>
+                    <button type="button" class="btn btn-sm" onclick="setCron('*/5 * * * *')">Every 5 min</button>
+                    <button type="button" class="btn btn-sm" onclick="setCron('0 * * * *')">Every hour</button>
+                    <button type="button" class="btn btn-sm" onclick="setCron('0 0 * * *')">Daily</button>
+                    <button type="button" class="btn btn-sm" onclick="setCron('0 0 * * 0')">Weekly</button>
+                    <button type="button" class="btn btn-sm" onclick="setCron('0 0 1 * *')">Monthly</button>
+                </div>
+                <div id="cron-preview" class="cron-preview"></div>
+            </div>
+
+            <!-- One-time field -->
+            <div id="once-fields" style="{{ '' if job and job.schedule_type == 'once' else 'display:none' }}">
+                <label for="once_value">Run at</label>
+                <input type="datetime-local" id="once_value" name="once_value"
+                       value="{{ job.schedule_value if job and job.schedule_type == 'once' else '' }}">
+            </div>
+
+            <!-- Hidden field: actual schedule_value submitted -->
+            <input type="hidden" id="schedule_value" name="schedule_value" value="{{ job.schedule_value if job else '' }}">
+
+            <label style="margin-top: 1rem;">
+                <input type="checkbox" id="is_enabled" name="is_enabled"
+                       {{ 'checked' if not job or job.is_enabled else '' }}>
+                Enabled
+            </label>
+
+            <label>Environment Variables</label>
+            <div id="env-vars-container">
+                {% if job and job.env_vars and job.env_vars != '{}' %}
+                    {% for key, value in (job.env_vars | from_json).items() %}
+                    <div class="env-var-row">
+                        <input type="text" name="env_key" value="{{ key }}" placeholder="KEY">
+                        <input type="text" name="env_value" value="{{ value }}" placeholder="VALUE">
+                        <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            </div>
+            <button type="button" onclick="addEnvVar()" class="btn btn-sm" style="margin-bottom: 1.5rem;">
+                + Add Variable
+            </button>
+
+            <div>
+                <button type="submit" class="btn btn-primary" onclick="syncScheduleValue()">{{ 'Update Job' if job else 'Create Job' }}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function getScheduleType() {
+    return document.querySelector('input[name="schedule_type"]:checked').value;
+}
+
+function toggleScheduleType() {
+    const isCron = getScheduleType() === 'cron';
+    document.getElementById('cron-fields').style.display = isCron ? '' : 'none';
+    document.getElementById('once-fields').style.display = isCron ? 'none' : '';
+    syncScheduleValue();
+}
+
+function getCronExpression() {
+    const m = document.getElementById('cron_minute').value.trim() || '*';
+    const h = document.getElementById('cron_hour').value.trim() || '*';
+    const d = document.getElementById('cron_day').value.trim() || '*';
+    const mo = document.getElementById('cron_month').value.trim() || '*';
+    const w = document.getElementById('cron_weekday').value.trim() || '*';
+    return `${m} ${h} ${d} ${mo} ${w}`;
+}
+
+function setCron(expr) {
+    const parts = expr.split(' ');
+    document.getElementById('cron_minute').value = parts[0] || '*';
+    document.getElementById('cron_hour').value = parts[1] || '*';
+    document.getElementById('cron_day').value = parts[2] || '*';
+    document.getElementById('cron_month').value = parts[3] || '*';
+    document.getElementById('cron_weekday').value = parts[4] || '*';
+    updateCronPreview();
+}
+
+let previewTimeout = null;
+function updateCronPreview() {
+    const expr = getCronExpression();
+    document.getElementById('cron-expression').textContent = expr;
+
+    clearTimeout(previewTimeout);
+    previewTimeout = setTimeout(() => {
+        fetch(`{{ url_for('jobs.cron_preview') }}?expr=${encodeURIComponent(expr)}`)
+            .then(r => r.json())
+            .then(data => {
+                const el = document.getElementById('cron-preview');
+                if (data.error) {
+                    el.innerHTML = `<span class="cron-preview-error">${data.error}</span>`;
+                } else {
+                    const items = data.next_runs.map(t => `<li>${t}</li>`).join('');
+                    el.innerHTML = `<div class="cron-preview-label">Next runs:</div><ul class="cron-preview-list">${items}</ul>`;
+                }
+            })
+            .catch(() => {});
+    }, 300);
+}
+
+function syncScheduleValue() {
+    const hidden = document.getElementById('schedule_value');
+    if (getScheduleType() === 'cron') {
+        hidden.value = getCronExpression();
+    } else {
+        hidden.value = document.getElementById('once_value').value;
+    }
+}
+
+// Also sync when once_value changes
+document.addEventListener('DOMContentLoaded', () => {
+    const onceInput = document.getElementById('once_value');
+    if (onceInput) onceInput.addEventListener('input', syncScheduleValue);
+
+    // Initial sync & preview
+    syncScheduleValue();
+    if (getScheduleType() === 'cron') updateCronPreview();
+});
+
+function addEnvVar() {
+    const container = document.getElementById('env-vars-container');
+    const row = document.createElement('div');
+    row.className = 'env-var-row';
+    row.innerHTML = `
+        <input type="text" name="env_key" placeholder="KEY">
+        <input type="text" name="env_value" placeholder="VALUE">
+        <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
+    `;
+    container.appendChild(row);
+}
+</script>
+{% endblock %}
