@@ -17,7 +17,7 @@ from flask import (
 
 from flask import url_for as _url_for
 
-from mogiri.models import Execution, Job, db
+from mogiri.models import Execution, Job, Setting, db
 from mogiri.scheduler import execute_job, register_job, unregister_job
 
 
@@ -39,8 +39,17 @@ def _schedule_ctx(job):
 def _build_schedule(form, prefix="job"):
     """Extract schedule_type and schedule_value from form fields."""
     schedule_type = form.get(f"{prefix}_schedule_type", "cron")
-    # The hidden field has the computed value from JS
     schedule_value = form.get(f"{prefix}_schedule_value", "")
+    # Fallback: if JS sync missed, build cron from individual fields
+    if schedule_type == "cron" and not schedule_value.strip():
+        parts = [
+            form.get(f"{prefix}_cron_minute", "*").strip() or "*",
+            form.get(f"{prefix}_cron_hour", "*").strip() or "*",
+            form.get(f"{prefix}_cron_day", "*").strip() or "*",
+            form.get(f"{prefix}_cron_month", "*").strip() or "*",
+            form.get(f"{prefix}_cron_weekday", "*").strip() or "*",
+        ]
+        schedule_value = " ".join(parts)
     return schedule_type, schedule_value
 
 bp = Blueprint("jobs", __name__, url_prefix="/jobs")
@@ -224,12 +233,14 @@ def cron_preview():
 
 @bp.route("/ai-chat", methods=["POST"])
 def ai_chat():
-    """Stream Claude CLI response for the chat assistant."""
+    """Stream AI CLI response for the chat assistant."""
     data = request.get_json()
     message = data.get("message", "")
     command_type = data.get("command_type", "shell")
     current_command = data.get("current_command", "")
     history = data.get("history", [])
+
+    ai_provider = Setting.get("ai_provider", "claude")
 
     system_prompt = (
         "You are an AI assistant embedded in mogiri, a local job manager. "
@@ -254,10 +265,19 @@ def ai_chat():
     prompt_parts.append(message)
     prompt = "\n".join(prompt_parts)
 
+    # Build CLI command based on provider
+    if ai_provider == "gemini":
+        full_prompt = f"[System]\n{system_prompt}\n\n[User]\n{prompt}"
+        cmd = ["gemini", "-p", full_prompt]
+        cmd_label = "gemini"
+    else:
+        cmd = ["claude", "-p", "--system-prompt", system_prompt, prompt]
+        cmd_label = "claude"
+
     def generate():
         try:
             proc = subprocess.Popen(
-                ["claude", "-p", "--system-prompt", system_prompt, prompt],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
             )
@@ -273,7 +293,7 @@ def ai_chat():
                 if err.strip():
                     yield f"data: {json.dumps({'error': err.strip()})}\n\n"
         except FileNotFoundError:
-            yield f"data: {json.dumps({'error': 'claude command not found. Make sure Claude Code CLI is installed.'})}\n\n"
+            yield f"data: {json.dumps({'error': f'{cmd_label} command not found. Make sure {cmd_label} CLI is installed.'})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         yield "data: [DONE]\n\n"

@@ -31,6 +31,7 @@ def init_scheduler(app):
     )
 
     scheduler.start()
+    print(f"[mogiri] Scheduler started with {len(scheduler.get_jobs())} job(s)")
 
 
 def shutdown_scheduler():
@@ -74,8 +75,9 @@ def _add_scheduler_job(job):
             replace_existing=True,
             max_instances=1,
         )
+        print(f"[mogiri] Registered job: {job.name} ({job.schedule_type}: {job.schedule_value})")
     except Exception as e:
-        print(f"Failed to schedule job {job.id} ({job.name}): {e}")
+        print(f"[mogiri] Failed to schedule job {job.id} ({job.name}): {e}")
 
 
 def _add_scheduler_workflow(wf):

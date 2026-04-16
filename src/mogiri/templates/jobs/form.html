@@ -17,7 +17,8 @@
     <div class="form-side">
         <div class="card form-card">
             <div class="card-body">
-                <form method="post" action="{{ url_for('jobs.job_update', job_id=job.id) if job else url_for('jobs.job_create') }}">
+                <form method="post" action="{{ url_for('jobs.job_update', job_id=job.id) if job else url_for('jobs.job_create') }}"
+                      onsubmit="syncAll()">
                     <label for="name">Name</label>
                     <input type="text" id="name" name="name" value="{{ job.name if job else '' }}" required
                            placeholder="My backup job">
@@ -83,7 +84,7 @@
                     </button>
 
                     <div>
-                        <button type="submit" class="btn btn-primary" onclick="syncAll()">{{ 'Update Job' if job else 'Create Job' }}</button>
+                        <button type="submit" class="btn btn-primary">{{ 'Update Job' if job else 'Create Job' }}</button>
                     </div>
                 </form>
             </div>
@@ -280,10 +281,12 @@ async function sendChatMessage() {
     chatHistory.push({ role: 'user', content: message });
 
     const msgEl = addChatMessage('assistant', '');
+    const bubble = msgEl.querySelector('.chat-msg-bubble');
     const contentEl = msgEl.querySelector('.chat-msg-content');
     contentEl.innerHTML = '<span class="chat-loading">Thinking...</span>';
 
     let fullText = '';
+    let streaming = false;
 
     try {
         const resp = await fetch('{{ url_for("jobs.ai_chat") }}', {
@@ -316,6 +319,10 @@ async function sendChatMessage() {
                     try {
                         const data = JSON.parse(payload);
                         if (data.t) {
+                            if (!streaming) {
+                                streaming = true;
+                                bubble.classList.add('chat-streaming');
+                            }
                             fullText += data.t;
                             contentEl.textContent = fullText;
                         }
@@ -334,12 +341,17 @@ async function sendChatMessage() {
         contentEl.textContent = 'Error: ' + e.message;
     }
 
+    bubble.classList.remove('chat-streaming');
     sendBtn.disabled = false;
     sendBtn.textContent = 'Send';
 
     if (fullText) {
         renderChatMarkdown(contentEl, fullText);
         chatHistory.push({ role: 'assistant', content: fullText });
+        const doneEl = document.createElement('div');
+        doneEl.className = 'chat-done-indicator';
+        doneEl.textContent = 'Done';
+        bubble.appendChild(doneEl);
     }
 }
 </script>

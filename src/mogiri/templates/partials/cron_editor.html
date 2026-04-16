@@ -39,35 +39,35 @@
     <div class="cron-grid">
         <div class="cron-field">
             <label for="{{ prefix }}_cron_minute">Minute</label>
-            <input type="text" id="{{ prefix }}_cron_minute"
+            <input type="text" id="{{ prefix }}_cron_minute" name="{{ prefix }}_cron_minute"
                    value="{{ cron_parts[0] }}" placeholder="*"
                    oninput="{{ prefix }}UpdateCronPreview()">
             <div class="cron-hint">0-59</div>
         </div>
         <div class="cron-field">
             <label for="{{ prefix }}_cron_hour">Hour</label>
-            <input type="text" id="{{ prefix }}_cron_hour"
+            <input type="text" id="{{ prefix }}_cron_hour" name="{{ prefix }}_cron_hour"
                    value="{{ cron_parts[1] }}" placeholder="*"
                    oninput="{{ prefix }}UpdateCronPreview()">
             <div class="cron-hint">0-23</div>
         </div>
         <div class="cron-field">
             <label for="{{ prefix }}_cron_day">Day</label>
-            <input type="text" id="{{ prefix }}_cron_day"
+            <input type="text" id="{{ prefix }}_cron_day" name="{{ prefix }}_cron_day"
                    value="{{ cron_parts[2] }}" placeholder="*"
                    oninput="{{ prefix }}UpdateCronPreview()">
             <div class="cron-hint">1-31</div>
         </div>
         <div class="cron-field">
             <label for="{{ prefix }}_cron_month">Month</label>
-            <input type="text" id="{{ prefix }}_cron_month"
+            <input type="text" id="{{ prefix }}_cron_month" name="{{ prefix }}_cron_month"
                    value="{{ cron_parts[3] }}" placeholder="*"
                    oninput="{{ prefix }}UpdateCronPreview()">
             <div class="cron-hint">1-12</div>
         </div>
         <div class="cron-field">
             <label for="{{ prefix }}_cron_weekday">Weekday</label>
-            <input type="text" id="{{ prefix }}_cron_weekday"
+            <input type="text" id="{{ prefix }}_cron_weekday" name="{{ prefix }}_cron_weekday"
                    value="{{ cron_parts[4] }}" placeholder="*"
                    oninput="{{ prefix }}UpdateCronPreview()">
             <div class="cron-hint">0-6 (Mon-Sun)</div>

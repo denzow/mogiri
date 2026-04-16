@@ -14,7 +14,8 @@ def index():
         env_vars = json.loads(raw)
     except (json.JSONDecodeError, TypeError):
         env_vars = {}
-    return render_template("settings/index.html", env_vars=env_vars)
+    ai_provider = Setting.get("ai_provider", "claude")
+    return render_template("settings/index.html", env_vars=env_vars, ai_provider=ai_provider)
 
 
 @bp.route("/", methods=["POST"])
@@ -27,5 +28,10 @@ def update():
         if k:
             env_vars[k] = v
     Setting.set("global_env_vars", json.dumps(env_vars))
+
+    ai_provider = request.form.get("ai_provider", "claude")
+    if ai_provider in ("claude", "gemini"):
+        Setting.set("ai_provider", ai_provider)
+
     flash("Settings saved.", "success")
     return redirect(url_for("settings.index"))

@@ -6,6 +6,36 @@
     <h1>Settings</h1>
 </div>
 
+<div class="card form-card" style="margin-bottom: 1.5rem;">
+    <div class="card-header">AI Chat Provider</div>
+    <div class="card-body">
+        <p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 1.25rem;">
+            Select the CLI tool used for the AI assistant in the job editor.
+        </p>
+        <form method="post" action="{{ url_for('settings.update') }}">
+            <!-- preserve env vars so they don't get cleared -->
+            {% for key, value in env_vars.items() %}
+            <input type="hidden" name="env_key" value="{{ key }}">
+            <input type="hidden" name="env_value" value="{{ value }}">
+            {% endfor %}
+
+            <div class="schedule-radios" style="margin-bottom: 1rem;">
+                <label>
+                    <input type="radio" name="ai_provider" value="claude"
+                           {{ 'checked' if ai_provider == 'claude' else '' }}>
+                    Claude Code (<code>claude</code>)
+                </label>
+                <label>
+                    <input type="radio" name="ai_provider" value="gemini"
+                           {{ 'checked' if ai_provider == 'gemini' else '' }}>
+                    Gemini CLI (<code>gemini</code>)
+                </label>
+            </div>
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </form>
+    </div>
+</div>
+
 <div class="card form-card">
     <div class="card-header">Global Environment Variables</div>
     <div class="card-body">
