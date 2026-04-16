@@ -10,6 +10,7 @@ dependencies = [
     "click>=8.0",
     "pyyaml>=6.0",
     "flask-migrate>=4.0",
+    "slack-sdk>=3.27",
 ]
 
 [project.optional-dependencies]

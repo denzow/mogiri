@@ -8,35 +8,68 @@ from mogiri.scheduler import execute_job, execute_workflow
 
 def test_has_cycle_no_cycle():
     connections = [
-        {"source_job_id": "a", "target_job_id": "b"},
-        {"source_job_id": "b", "target_job_id": "c"},
+        {"source_job_id": "a", "target_job_id": "b",
+         "source_node_key": "a:0", "target_node_key": "b:0"},
+        {"source_job_id": "b", "target_job_id": "c",
+         "source_node_key": "b:0", "target_node_key": "c:0"},
     ]
     assert _has_cycle(connections) is False
 
 
 def test_has_cycle_with_cycle():
     connections = [
-        {"source_job_id": "a", "target_job_id": "b"},
-        {"source_job_id": "b", "target_job_id": "a"},
+        {"source_job_id": "a", "target_job_id": "b",
+         "source_node_key": "a:0", "target_node_key": "b:0"},
+        {"source_job_id": "b", "target_job_id": "a",
+         "source_node_key": "b:0", "target_node_key": "a:0"},
     ]
     assert _has_cycle(connections) is True
 
 
 def test_has_cycle_self_loop():
     connections = [
-        {"source_job_id": "a", "target_job_id": "a"},
+        {"source_job_id": "a", "target_job_id": "a",
+         "source_node_key": "a:0", "target_node_key": "a:0"},
     ]
     assert _has_cycle(connections) is True
 
 
+def test_has_cycle_same_job_different_nodes():
+    """Same job used twice with different node_keys is NOT a cycle."""
+    connections = [
+        {"source_job_id": "a", "target_job_id": "b",
+         "source_node_key": "a:0", "target_node_key": "b:0"},
+        {"source_job_id": "b", "target_job_id": "a",
+         "source_node_key": "b:0", "target_node_key": "a:1"},
+    ]
+    assert _has_cycle(connections) is False
+
+
+def test_has_cycle_legacy_no_node_keys():
+    """Fallback to job_id when node_keys are absent (legacy data)."""
+    connections = [
+        {"source_job_id": "a", "target_job_id": "b"},
+        {"source_job_id": "b", "target_job_id": "c"},
+    ]
+    assert _has_cycle(connections) is False
+
+
 def _create_workflow_with_edge(db_session, job_a, job_b, condition="success"):
-    wf = Workflow(name="Test WF", entry_job_ids=json.dumps([job_a.id]))
+    nk_a = f"{job_a.id}:0"
+    nk_b = f"{job_b.id}:0"
+    wf = Workflow(
+        name="Test WF",
+        entry_job_ids=json.dumps([job_a.id]),
+        entry_node_keys=json.dumps([{"node_key": nk_a, "job_id": job_a.id}]),
+    )
     db_session.add(wf)
     db_session.commit()
     edge = WorkflowEdge(
         workflow_id=wf.id,
         source_job_id=job_a.id,
         target_job_id=job_b.id,
+        source_node_key=nk_a,
+        target_node_key=nk_b,
         trigger_condition=condition,
     )
     db_session.add(edge)
@@ -151,12 +184,20 @@ def test_multiple_workflows_same_jobs(app):
         # Workflow 1: A -> B on success
         wf1 = _create_workflow_with_edge(_db.session, job_a, job_b, "success")
         # Workflow 2: A -> C on success (separate workflow)
-        wf2 = Workflow(name="WF2", entry_job_ids=json.dumps([job_a.id]))
+        nk_a2 = f"{job_a.id}:0"
+        nk_c = f"{job_c.id}:0"
+        wf2 = Workflow(
+            name="WF2",
+            entry_job_ids=json.dumps([job_a.id]),
+            entry_node_keys=json.dumps([{"node_key": nk_a2, "job_id": job_a.id}]),
+        )
         _db.session.add(wf2)
         _db.session.commit()
         _db.session.add(WorkflowEdge(
             workflow_id=wf2.id, source_job_id=job_a.id,
-            target_job_id=job_c.id, trigger_condition="success",
+            target_job_id=job_c.id,
+            source_node_key=nk_a2, target_node_key=nk_c,
+            trigger_condition="success",
         ))
         _db.session.commit()
 
@@ -186,13 +227,16 @@ def test_workflow_save_api(client, app):
 
     response = client.post(f"/chains/{wf_id}/save", json={
         "connections": [
-            {"source_job_id": a_id, "target_job_id": b_id, "trigger_condition": "success"}
+            {"source_job_id": a_id, "target_job_id": b_id,
+             "source_node_key": f"{a_id}:0", "target_node_key": f"{b_id}:0",
+             "trigger_condition": "success"}
         ],
         "node_positions": [
             {"job_id": a_id, "node_key": f"{a_id}:0", "x": 100, "y": 100},
             {"job_id": b_id, "node_key": f"{b_id}:0", "x": 400, "y": 100},
         ],
         "entry_job_ids": [a_id],
+        "entry_node_keys": [{"node_key": f"{a_id}:0", "job_id": a_id}],
         "schedule_type": "cron",
         "schedule_value": "0 * * * *",
     })
@@ -202,6 +246,8 @@ def test_workflow_save_api(client, app):
     with app.app_context():
         edges = WorkflowEdge.query.filter_by(workflow_id=wf_id).all()
         assert len(edges) == 1
+        assert edges[0].source_node_key == f"{a_id}:0"
+        assert edges[0].target_node_key == f"{b_id}:0"
         wf = _db.session.get(Workflow, wf_id)
         assert wf.schedule_type == "cron"
         assert wf.schedule_value == "0 * * * *"
@@ -219,11 +265,47 @@ def test_workflow_save_rejects_cycle(client, app):
 
     response = client.post(f"/chains/{wf_id}/save", json={
         "connections": [
-            {"source_job_id": a_id, "target_job_id": b_id},
-            {"source_job_id": b_id, "target_job_id": a_id},
+            {"source_job_id": a_id, "target_job_id": b_id,
+             "source_node_key": f"{a_id}:0", "target_node_key": f"{b_id}:0"},
+            {"source_job_id": b_id, "target_job_id": a_id,
+             "source_node_key": f"{b_id}:0", "target_node_key": f"{a_id}:0"},
         ],
         "node_positions": [],
         "entry_job_ids": [],
     })
     assert response.status_code == 400
     assert "Cycle" in response.get_json()["error"]
+
+
+def test_workflow_save_allows_same_job_different_nodes(client, app):
+    """Same job used as two separate nodes (A:0 -> B:0 -> A:1) is not a cycle."""
+    with app.app_context():
+        wf = Workflow(name="Test WF")
+        _db.session.add(wf)
+        job_a = Job(name="A", command="echo a", schedule_type="cron", schedule_value="* * * * *")
+        job_b = Job(name="B", command="echo b", schedule_type="cron", schedule_value="* * * * *")
+        _db.session.add_all([job_a, job_b])
+        _db.session.commit()
+        wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
+
+    response = client.post(f"/chains/{wf_id}/save", json={
+        "connections": [
+            {"source_job_id": a_id, "target_job_id": b_id,
+             "source_node_key": f"{a_id}:0", "target_node_key": f"{b_id}:0"},
+            {"source_job_id": b_id, "target_job_id": a_id,
+             "source_node_key": f"{b_id}:0", "target_node_key": f"{a_id}:1"},
+        ],
+        "node_positions": [
+            {"job_id": a_id, "node_key": f"{a_id}:0", "x": 100, "y": 100},
+            {"job_id": b_id, "node_key": f"{b_id}:0", "x": 300, "y": 100},
+            {"job_id": a_id, "node_key": f"{a_id}:1", "x": 500, "y": 100},
+        ],
+        "entry_job_ids": [a_id],
+        "entry_node_keys": [{"node_key": f"{a_id}:0", "job_id": a_id}],
+    })
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
+
+    with app.app_context():
+        edges = WorkflowEdge.query.filter_by(workflow_id=wf_id).all()
+        assert len(edges) == 2

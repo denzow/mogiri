@@ -46,6 +46,7 @@ class Execution(db.Model):
     status = db.Column(db.String, default="running")  # running, success, failed, timeout
     stdout = db.Column(db.Text, default="")
     stderr = db.Column(db.Text, default="")
+    node_key = db.Column(db.String, nullable=True)
     workflow_id = db.Column(
         db.String, db.ForeignKey("workflows.id"), nullable=True,
     )
@@ -72,6 +73,7 @@ class Workflow(db.Model):
     schedule_type = db.Column(db.String, default="none")  # "cron", "once", "none"
     schedule_value = db.Column(db.String, default="")
     entry_job_ids = db.Column(db.Text, default="[]")  # JSON list of job IDs
+    entry_node_keys = db.Column(db.Text, default="[]")  # JSON list of {"node_key", "job_id"}
     start_node_x = db.Column(db.Float, default=50)
     start_node_y = db.Column(db.Float, default=250)
     created_at = db.Column(db.DateTime, default=now)
@@ -92,6 +94,8 @@ class WorkflowEdge(db.Model):
     workflow_id = db.Column(db.String, db.ForeignKey("workflows.id"), nullable=False)
     source_job_id = db.Column(db.String, db.ForeignKey("jobs.id"), nullable=False)
     target_job_id = db.Column(db.String, db.ForeignKey("jobs.id"), nullable=False)
+    source_node_key = db.Column(db.String, nullable=True)
+    target_node_key = db.Column(db.String, nullable=True)
     trigger_condition = db.Column(db.String, nullable=False, default="success")
     # "success", "failure", "any"
 

@@ -10,7 +10,9 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
-from mogiri.models import Execution, Job, Setting, Workflow, WorkflowEdge, db
+from mogiri.models import (
+    Execution, Job, Setting, Workflow, WorkflowEdge, WorkflowNodePosition, db,
+)
 
 scheduler = BackgroundScheduler()
 _app = None
@@ -123,7 +125,7 @@ def unregister_workflow(wf_id):
 
 # ---------- Workflow execution ----------
 
-def execute_workflow(workflow_id: str) -> None:
+def execute_workflow(workflow_id: str, force: bool = False) -> None:
     """Execute a workflow by running its entry jobs."""
     app = _app
     if app is None:
@@ -131,9 +133,33 @@ def execute_workflow(workflow_id: str) -> None:
 
     with app.app_context():
         wf = db.session.get(Workflow, workflow_id)
-        if not wf or not wf.is_enabled:
+        if not wf:
+            return
+        if not force and not wf.is_enabled:
             return
 
+        # Prefer entry_node_keys (node_key aware) over entry_job_ids
+        entry_nodes = []
+        try:
+            entry_nodes = json.loads(wf.entry_node_keys or "[]")
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+        if entry_nodes:
+            for entry in entry_nodes:
+                node_key = entry.get("node_key")
+                job_id = entry.get("job_id")
+                if not job_id:
+                    continue
+                thread = threading.Thread(
+                    target=execute_job,
+                    args=(job_id,),
+                    kwargs={"_workflow_id": wf.id, "_node_key": node_key},
+                )
+                thread.start()
+            return
+
+        # Fallback: use entry_job_ids (legacy)
         entry_ids = set()
         try:
             entry_ids = set(json.loads(wf.entry_job_ids or "[]"))
@@ -161,6 +187,7 @@ def execute_workflow(workflow_id: str) -> None:
 def execute_job(
     job_id: str,
     _workflow_id: str = None,
+    _node_key: str = None,
     triggered_by_execution_id: str = None,
     triggered_by_chain_id: str = None,
     _chain_visited: set = None,
@@ -170,7 +197,9 @@ def execute_job(
     if app is None:
         return
 
-    chain_visited = _chain_visited or {job_id}
+    # Track visited by node_key when available, else by job_id
+    visit_key = _node_key or job_id
+    chain_visited = _chain_visited or {visit_key}
 
     with app.app_context():
         job = db.session.get(Job, job_id)
@@ -179,6 +208,7 @@ def execute_job(
 
         execution = Execution(
             job_id=job.id,
+            node_key=_node_key,
             status="running",
             workflow_id=_workflow_id,
             triggered_by_execution_id=triggered_by_execution_id,
@@ -200,6 +230,20 @@ def execute_job(
                 env.update(json.loads(job.env_vars))
             except (json.JSONDecodeError, TypeError):
                 pass
+
+        # Inject parent execution info for chain jobs
+        if triggered_by_execution_id:
+            parent_exec = db.session.get(Execution, triggered_by_execution_id)
+            if parent_exec:
+                parent_job = db.session.get(Job, parent_exec.job_id)
+                env["MOGIRI_PARENT_EXECUTION_ID"] = parent_exec.id
+                env["MOGIRI_PARENT_STATUS"] = parent_exec.status or ""
+                env["MOGIRI_PARENT_EXIT_CODE"] = str(
+                    parent_exec.exit_code if parent_exec.exit_code is not None else ""
+                )
+                env["MOGIRI_PARENT_STDOUT"] = (parent_exec.stdout or "")[-4000:]
+                env["MOGIRI_PARENT_STDERR"] = (parent_exec.stderr or "")[-4000:]
+                env["MOGIRI_PARENT_JOB_NAME"] = parent_job.name if parent_job else ""
 
         tmp_script = None
         try:
@@ -247,15 +291,22 @@ def execute_job(
 
             # Only trigger chains when running as part of a workflow
             if _workflow_id:
-                _trigger_chains(execution, _workflow_id, chain_visited)
+                _trigger_chains(execution, _workflow_id, _node_key, chain_visited)
 
 
-def _trigger_chains(execution, workflow_id, chain_visited):
+def _trigger_chains(execution, workflow_id, source_node_key, chain_visited):
     """After a job finishes within a workflow, trigger chained jobs."""
-    edges = WorkflowEdge.query.filter_by(
-        workflow_id=workflow_id,
-        source_job_id=execution.job_id,
-    ).all()
+    # Prefer matching by source_node_key; fall back to source_job_id
+    if source_node_key:
+        edges = WorkflowEdge.query.filter_by(
+            workflow_id=workflow_id,
+            source_node_key=source_node_key,
+        ).all()
+    else:
+        edges = WorkflowEdge.query.filter_by(
+            workflow_id=workflow_id,
+            source_job_id=execution.job_id,
+        ).all()
 
     for edge in edges:
         if edge.trigger_condition == "success" and execution.status != "success":
@@ -265,20 +316,23 @@ def _trigger_chains(execution, workflow_id, chain_visited):
         ):
             continue
 
-        if edge.target_job_id in chain_visited:
-            print(f"[mogiri] Chain cycle detected: skipping {edge.target_job_id}")
+        # Track visited by node_key when available, else by job_id
+        visit_key = edge.target_node_key or edge.target_job_id
+        if visit_key in chain_visited:
+            print(f"[mogiri] Chain cycle detected: skipping {visit_key}")
             continue
 
         target_job = db.session.get(Job, edge.target_job_id)
         if not target_job:
             continue
 
-        new_visited = chain_visited | {edge.target_job_id}
+        new_visited = chain_visited | {visit_key}
         thread = threading.Thread(
             target=execute_job,
             args=(edge.target_job_id,),
             kwargs={
                 "_workflow_id": workflow_id,
+                "_node_key": edge.target_node_key,
                 "triggered_by_execution_id": execution.id,
                 "triggered_by_chain_id": edge.id,
                 "_chain_visited": new_visited,

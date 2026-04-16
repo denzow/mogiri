@@ -117,6 +117,53 @@ def test_execute_python_job_with_error(app):
         assert "ValueError" in execution.stderr
 
 
+def test_execute_job_chain_parent_env_vars(app):
+    """Chained jobs receive MOGIRI_PARENT_* env vars from the parent execution."""
+    with app.app_context():
+        parent_job = Job(
+            name="parent job",
+            command="echo parent_output",
+            schedule_type="none",
+        )
+        child_job = Job(
+            name="child job",
+            command_type="python",
+            command=(
+                "import os\n"
+                "print(os.environ['MOGIRI_PARENT_STATUS'])\n"
+                "print(os.environ['MOGIRI_PARENT_EXIT_CODE'])\n"
+                "print(os.environ['MOGIRI_PARENT_JOB_NAME'])\n"
+                "print(os.environ['MOGIRI_PARENT_STDOUT'])\n"
+                "print(os.environ['MOGIRI_PARENT_EXECUTION_ID'])\n"
+            ),
+            schedule_type="none",
+        )
+        _db.session.add_all([parent_job, child_job])
+        _db.session.commit()
+        parent_job_id = parent_job.id
+        child_job_id = child_job.id
+
+    # Run the parent job first
+    execute_job(parent_job_id)
+
+    with app.app_context():
+        parent_exec = Execution.query.filter_by(job_id=parent_job_id).first()
+        assert parent_exec.status == "success"
+        parent_exec_id = parent_exec.id
+
+    # Run the child job as if triggered by the chain
+    execute_job(child_job_id, triggered_by_execution_id=parent_exec_id)
+
+    with app.app_context():
+        child_exec = Execution.query.filter_by(job_id=child_job_id).first()
+        assert child_exec.status == "success"
+        assert "success" in child_exec.stdout
+        assert "0" in child_exec.stdout
+        assert "parent job" in child_exec.stdout
+        assert "parent_output" in child_exec.stdout
+        assert parent_exec_id in child_exec.stdout
+
+
 def test_execute_job_nonexistent(app):
     """Executing a nonexistent job should not raise."""
     execute_job("nonexistent-id")

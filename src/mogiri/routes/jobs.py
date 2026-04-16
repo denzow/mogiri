@@ -1,7 +1,19 @@
 import json
+import subprocess
 import threading
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    stream_with_context,
+    url_for,
+)
 
 from flask import url_for as _url_for
 
@@ -208,6 +220,69 @@ def cron_preview():
         return jsonify({"next_runs": runs})
     except Exception as e:
         return jsonify({"error": str(e)})
+
+
+@bp.route("/ai-chat", methods=["POST"])
+def ai_chat():
+    """Stream Claude CLI response for the chat assistant."""
+    data = request.get_json()
+    message = data.get("message", "")
+    command_type = data.get("command_type", "shell")
+    current_command = data.get("current_command", "")
+    history = data.get("history", [])
+
+    system_prompt = (
+        "You are an AI assistant embedded in mogiri, a local job manager. "
+        "Help users write shell commands or Python scripts for their scheduled jobs. "
+        "When providing code, always use a fenced code block with the appropriate "
+        "language tag (```bash for shell, ```python for Python). "
+        "Keep responses concise and focused on the task."
+    )
+
+    # Build prompt with conversation context
+    prompt_parts = []
+    if history:
+        for msg in history:
+            role = "User" if msg.get("role") == "user" else "Assistant"
+            content = msg.get("content", "")
+            prompt_parts.append(f"{role}: {content}")
+        prompt_parts.append("")
+    if current_command.strip():
+        prompt_parts.append(
+            f"The user's current {command_type} command in the editor:\n```\n{current_command}\n```\n"
+        )
+    prompt_parts.append(message)
+    prompt = "\n".join(prompt_parts)
+
+    def generate():
+        try:
+            proc = subprocess.Popen(
+                ["claude", "-p", "--system-prompt", system_prompt, prompt],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            while True:
+                chunk = proc.stdout.read1(4096)
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace")
+                yield f"data: {json.dumps({'t': text})}\n\n"
+            proc.wait()
+            if proc.returncode != 0:
+                err = proc.stderr.read().decode("utf-8", errors="replace")
+                if err.strip():
+                    yield f"data: {json.dumps({'error': err.strip()})}\n\n"
+        except FileNotFoundError:
+            yield f"data: {json.dumps({'error': 'claude command not found. Make sure Claude Code CLI is installed.'})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @bp.route("/<job_id>/run", methods=["POST"])

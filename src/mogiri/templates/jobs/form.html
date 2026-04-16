@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ 'Edit' if job else 'New' }} Job - mogiri{% endblock %}
+{% block main_class %}main-wide{% endblock %}
 
 {% set cron_parts = job.schedule_value.split() if job and job.schedule_type == 'cron' and job.schedule_value and job.schedule_value.split()|length == 5 else ['*','*','*','*','*'] %}
 
@@ -12,81 +13,106 @@
     <h1>{{ 'Edit Job' if job else 'New Job' }}</h1>
 </div>
 
-<div class="card form-card">
-    <div class="card-body">
-        <form method="post" action="{{ url_for('jobs.job_update', job_id=job.id) if job else url_for('jobs.job_create') }}">
-            <label for="name">Name</label>
-            <input type="text" id="name" name="name" value="{{ job.name if job else '' }}" required
-                   placeholder="My backup job">
+<div class="form-with-chat">
+    <div class="form-side">
+        <div class="card form-card">
+            <div class="card-body">
+                <form method="post" action="{{ url_for('jobs.job_update', job_id=job.id) if job else url_for('jobs.job_create') }}">
+                    <label for="name">Name</label>
+                    <input type="text" id="name" name="name" value="{{ job.name if job else '' }}" required
+                           placeholder="My backup job">
 
-            <label for="description">Description</label>
-            <textarea id="description" name="description" rows="2"
-                      placeholder="What this job does (optional)">{{ job.description if job else '' }}</textarea>
+                    <label for="description">Description</label>
+                    <textarea id="description" name="description" rows="2"
+                              placeholder="What this job does (optional)">{{ job.description if job else '' }}</textarea>
 
-            <label>Command Type</label>
-            <div class="schedule-radios">
-                <label>
-                    <input type="radio" name="command_type" value="shell"
-                           {{ 'checked' if not job or job.command_type == 'shell' else '' }}
-                           onchange="toggleCommandType()">
-                    Shell
-                </label>
-                <label>
-                    <input type="radio" name="command_type" value="python"
-                           {{ 'checked' if job and job.command_type == 'python' else '' }}
-                           onchange="toggleCommandType()">
-                    Python
-                </label>
-            </div>
-
-            <div id="shell-command" style="{{ 'display:none' if job and job.command_type == 'python' else '' }}">
-                <label for="shell_input">Command</label>
-                <input type="text" id="shell_input" name="shell_input"
-                       value="{{ job.command if job and job.command_type != 'python' else '' }}"
-                       placeholder="e.g. echo hello">
-            </div>
-
-            <div id="python-command" style="{{ '' if job and job.command_type == 'python' else 'display:none' }}">
-                <label for="python_input">Python Script</label>
-                <textarea id="python_input" name="python_input" rows="12"
-                          class="code-editor"
-                          placeholder="import os&#10;print('Hello from mogiri!')">{{ job.command if job and job.command_type == 'python' else '' }}</textarea>
-            </div>
-
-            <input type="hidden" id="command" name="command" value="{{ job.command if job else '' }}">
-
-            {% include "partials/cron_editor.html" with context %}
-
-            <label style="margin-top: 1rem;">
-                <input type="checkbox" id="is_enabled" name="is_enabled"
-                       {{ 'checked' if not job or job.is_enabled else '' }}>
-                Enabled
-            </label>
-
-            <label>Environment Variables</label>
-            <div id="env-vars-container">
-                {% if job and job.env_vars and job.env_vars != '{}' %}
-                    {% for key, value in (job.env_vars | from_json).items() %}
-                    <div class="env-var-row">
-                        <input type="text" name="env_key" value="{{ key }}" placeholder="KEY">
-                        <input type="text" name="env_value" value="{{ value }}" placeholder="VALUE">
-                        <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
+                    <label>Command Type</label>
+                    <div class="schedule-radios">
+                        <label>
+                            <input type="radio" name="command_type" value="shell"
+                                   {{ 'checked' if not job or job.command_type == 'shell' else '' }}
+                                   onchange="toggleCommandType()">
+                            Shell
+                        </label>
+                        <label>
+                            <input type="radio" name="command_type" value="python"
+                                   {{ 'checked' if job and job.command_type == 'python' else '' }}
+                                   onchange="toggleCommandType()">
+                            Python
+                        </label>
                     </div>
-                    {% endfor %}
-                {% endif %}
-            </div>
-            <button type="button" onclick="addEnvVar()" class="btn btn-sm" style="margin-bottom: 1.5rem;">
-                + Add Variable
-            </button>
 
-            <div>
-                <button type="submit" class="btn btn-primary" onclick="syncAll()">{{ 'Update Job' if job else 'Create Job' }}</button>
+                    <div id="shell-command" style="{{ 'display:none' if job and job.command_type == 'python' else '' }}">
+                        <label for="shell_input">Command</label>
+                        <input type="text" id="shell_input" name="shell_input"
+                               value="{{ job.command if job and job.command_type != 'python' else '' }}"
+                               placeholder="e.g. echo hello">
+                    </div>
+
+                    <div id="python-command" style="{{ '' if job and job.command_type == 'python' else 'display:none' }}">
+                        <label for="python_input">Python Script</label>
+                        <textarea id="python_input" name="python_input" rows="12"
+                                  class="code-editor"
+                                  placeholder="import os&#10;print('Hello from mogiri!')">{{ job.command if job and job.command_type == 'python' else '' }}</textarea>
+                    </div>
+
+                    <input type="hidden" id="command" name="command" value="{{ job.command if job else '' }}">
+
+                    {% include "partials/cron_editor.html" with context %}
+
+                    <label style="margin-top: 1rem;">
+                        <input type="checkbox" id="is_enabled" name="is_enabled"
+                               {{ 'checked' if not job or job.is_enabled else '' }}>
+                        Enabled
+                    </label>
+
+                    <label>Environment Variables</label>
+                    <div id="env-vars-container">
+                        {% if job and job.env_vars and job.env_vars != '{}' %}
+                            {% for key, value in (job.env_vars | from_json).items() %}
+                            <div class="env-var-row">
+                                <input type="text" name="env_key" value="{{ key }}" placeholder="KEY">
+                                <input type="text" name="env_value" value="{{ value }}" placeholder="VALUE">
+                                <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <button type="button" onclick="addEnvVar()" class="btn btn-sm" style="margin-bottom: 1.5rem;">
+                        + Add Variable
+                    </button>
+
+                    <div>
+                        <button type="submit" class="btn btn-primary" onclick="syncAll()">{{ 'Update Job' if job else 'Create Job' }}</button>
+                    </div>
+                </form>
             </div>
-        </form>
+        </div>
+    </div>
+
+    <div class="chat-side">
+        <div class="card chat-card">
+            <div class="card-header">AI Assistant</div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-welcome">
+                    Ask Claude to help write your command or script.
+                </div>
+            </div>
+            <div class="chat-input-area">
+                <textarea id="chat-input" rows="3"
+                          placeholder="e.g. Write a Python script that backs up a PostgreSQL database..."
+                          onkeydown="handleChatKeydown(event)"></textarea>
+                <div class="chat-input-actions">
+                    <span class="chat-hint">Ctrl+Enter to send</span>
+                    <button type="button" onclick="sendChatMessage()" class="btn btn-primary btn-sm" id="chat-send-btn">Send</button>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <script>
+/* ===== Form functions (existing) ===== */
 function getCommandType() {
     return document.querySelector('input[name="command_type"]:checked').value;
 }
@@ -114,6 +140,207 @@ function addEnvVar() {
         <button type="button" onclick="this.parentElement.remove()" class="btn btn-danger btn-sm">Remove</button>
     `;
     container.appendChild(row);
+}
+
+/* ===== Chat functions ===== */
+let chatHistory = [];
+
+function getCurrentCommand() {
+    if (getCommandType() === 'python') {
+        return document.getElementById('python_input').value;
+    }
+    return document.getElementById('shell_input').value;
+}
+
+function handleChatKeydown(e) {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        sendChatMessage();
+    }
+}
+
+function addChatMessage(role, content) {
+    const container = document.getElementById('chat-messages');
+    const welcome = container.querySelector('.chat-welcome');
+    if (welcome) welcome.remove();
+
+    const msg = document.createElement('div');
+    msg.className = 'chat-msg chat-msg-' + role;
+
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-msg-bubble';
+
+    const contentEl = document.createElement('div');
+    contentEl.className = 'chat-msg-content';
+    if (role === 'user') {
+        contentEl.textContent = content;
+    }
+
+    bubble.appendChild(contentEl);
+    msg.appendChild(bubble);
+    container.appendChild(msg);
+    container.scrollTop = container.scrollHeight;
+    return msg;
+}
+
+function renderChatMarkdown(contentEl, text) {
+    contentEl.innerHTML = '';
+    const parts = text.split(/(```[\s\S]*?```)/g);
+
+    for (const part of parts) {
+        if (part.startsWith('```')) {
+            const match = part.match(/```(\w*)\n?([\s\S]*?)```/);
+            if (match) {
+                const lang = match[1] || '';
+                const code = match[2].replace(/^\n|\n$/g, '');
+
+                const block = document.createElement('div');
+                block.className = 'chat-code-block';
+
+                const header = document.createElement('div');
+                header.className = 'chat-code-header';
+
+                const langSpan = document.createElement('span');
+                langSpan.textContent = lang || 'code';
+                header.appendChild(langSpan);
+
+                const applyBtn = document.createElement('button');
+                applyBtn.className = 'chat-apply-btn';
+                applyBtn.textContent = 'Apply';
+                applyBtn.onclick = function() { applyCode(code, lang); };
+                header.appendChild(applyBtn);
+
+                const pre = document.createElement('pre');
+                const codeEl = document.createElement('code');
+                codeEl.textContent = code;
+                pre.appendChild(codeEl);
+
+                block.appendChild(header);
+                block.appendChild(pre);
+                contentEl.appendChild(block);
+            }
+        } else if (part.trim()) {
+            const textEl = document.createElement('div');
+            textEl.className = 'chat-text';
+            textEl.textContent = part;
+            contentEl.appendChild(textEl);
+        }
+    }
+}
+
+function applyCode(code, lang) {
+    const pythonLangs = ['python', 'py', 'python3'];
+    const shellLangs = ['bash', 'sh', 'shell', 'zsh'];
+
+    let targetId;
+    if (pythonLangs.includes(lang.toLowerCase())) {
+        document.querySelector('input[name="command_type"][value="python"]').checked = true;
+        toggleCommandType();
+        document.getElementById('python_input').value = code;
+        targetId = 'python_input';
+    } else if (shellLangs.includes(lang.toLowerCase())) {
+        document.querySelector('input[name="command_type"][value="shell"]').checked = true;
+        toggleCommandType();
+        document.getElementById('shell_input').value = code;
+        targetId = 'shell_input';
+    } else {
+        if (getCommandType() === 'python') {
+            document.getElementById('python_input').value = code;
+            targetId = 'python_input';
+        } else {
+            document.getElementById('shell_input').value = code;
+            targetId = 'shell_input';
+        }
+    }
+
+    // Flash highlight on target
+    const target = document.getElementById(targetId);
+    target.style.transition = 'box-shadow 0.3s';
+    target.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
+    setTimeout(function() { target.style.boxShadow = ''; }, 1500);
+
+    // Scroll form to show the command area
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+    if (!message) return;
+
+    const sendBtn = document.getElementById('chat-send-btn');
+    sendBtn.disabled = true;
+    sendBtn.textContent = '...';
+    input.value = '';
+
+    addChatMessage('user', message);
+
+    // Capture history before adding current message to avoid duplication
+    const historyToSend = chatHistory.slice(-10);
+    chatHistory.push({ role: 'user', content: message });
+
+    const msgEl = addChatMessage('assistant', '');
+    const contentEl = msgEl.querySelector('.chat-msg-content');
+    contentEl.innerHTML = '<span class="chat-loading">Thinking...</span>';
+
+    let fullText = '';
+
+    try {
+        const resp = await fetch('{{ url_for("jobs.ai_chat") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                message: message,
+                command_type: getCommandType(),
+                current_command: getCurrentCommand(),
+                history: historyToSend
+            })
+        });
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const payload = line.slice(6);
+                    if (payload === '[DONE]') continue;
+                    try {
+                        const data = JSON.parse(payload);
+                        if (data.t) {
+                            fullText += data.t;
+                            contentEl.textContent = fullText;
+                        }
+                        if (data.error) {
+                            contentEl.textContent = 'Error: ' + data.error;
+                            fullText = '';
+                        }
+                    } catch (e) {}
+                }
+            }
+
+            document.getElementById('chat-messages').scrollTop =
+                document.getElementById('chat-messages').scrollHeight;
+        }
+    } catch (e) {
+        contentEl.textContent = 'Error: ' + e.message;
+    }
+
+    sendBtn.disabled = false;
+    sendBtn.textContent = 'Send';
+
+    if (fullText) {
+        renderChatMarkdown(contentEl, fullText);
+        chatHistory.push({ role: 'assistant', content: fullText });
+    }
 }
 </script>
 {% endblock %}

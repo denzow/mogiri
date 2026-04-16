@@ -41,13 +41,15 @@ def _wf_schedule_ctx(wf):
 
 
 def _has_cycle(connections):
-    """DFS-based cycle detection on the proposed chain graph."""
+    """DFS-based cycle detection on the proposed chain graph (node_key based)."""
     graph = defaultdict(list)
     nodes = set()
     for conn in connections:
-        graph[conn["source_job_id"]].append(conn["target_job_id"])
-        nodes.add(conn["source_job_id"])
-        nodes.add(conn["target_job_id"])
+        src = conn.get("source_node_key") or conn["source_job_id"]
+        tgt = conn.get("target_node_key") or conn["target_job_id"]
+        graph[src].append(tgt)
+        nodes.add(src)
+        nodes.add(tgt)
 
     visited = set()
     rec_stack = set()
@@ -140,7 +142,7 @@ def workflow_run(workflow_id):
     if not wf:
         abort(404)
 
-    thread = threading.Thread(target=execute_workflow, args=(wf.id,))
+    thread = threading.Thread(target=execute_workflow, args=(wf.id,), kwargs={"force": True})
     thread.start()
 
     history_url = url_for("chains.chain_history", workflow_id=wf.id)
@@ -175,6 +177,8 @@ def workflow_editor(workflow_id):
         {
             "source_job_id": e.source_job_id,
             "target_job_id": e.target_job_id,
+            "source_node_key": e.source_node_key,
+            "target_node_key": e.target_node_key,
             "trigger_condition": e.trigger_condition,
         }
         for e in edges
@@ -186,6 +190,13 @@ def workflow_editor(workflow_id):
         entry_job_ids = _json.loads(wf.entry_job_ids or "[]")
     except (ValueError, TypeError):
         pass
+    entry_node_keys = []
+    try:
+        entry_node_keys = _json.loads(wf.entry_node_keys or "[]")
+    except (ValueError, TypeError):
+        pass
+
+    has_saved_state = bool(edges_data or entry_job_ids or entry_node_keys)
 
     return render_template(
         "chains/editor.html",
@@ -194,6 +205,8 @@ def workflow_editor(workflow_id):
         edges_data=edges_data,
         node_positions=node_positions,
         entry_job_ids=entry_job_ids,
+        entry_node_keys=entry_node_keys,
+        has_saved_state=has_saved_state,
         start_node_x=wf.start_node_x or 50,
         start_node_y=wf.start_node_y or 250,
         **_wf_schedule_ctx(wf),
@@ -217,6 +230,7 @@ def workflow_save(workflow_id):
     connections = data.get("connections", [])
     node_positions = data.get("node_positions", [])
     entry_job_ids = data.get("entry_job_ids", [])
+    entry_node_keys_data = data.get("entry_node_keys", [])
     start_pos = data.get("start_node", {})
     name = data.get("name")
     description = data.get("description")
@@ -233,6 +247,7 @@ def workflow_save(workflow_id):
         wf.schedule_value = schedule_value
 
     wf.entry_job_ids = _json.dumps(entry_job_ids)
+    wf.entry_node_keys = _json.dumps(entry_node_keys_data)
     if start_pos:
         wf.start_node_x = start_pos.get("x", 50)
         wf.start_node_y = start_pos.get("y", 250)
@@ -240,12 +255,13 @@ def workflow_save(workflow_id):
     if _has_cycle(connections):
         return jsonify({"error": "Cycle detected in chain configuration"}), 400
 
-    # Replace edges — deduplicate by (source, target, condition)
+    # Replace edges — deduplicate by (source_node_key, target_node_key, condition)
     WorkflowEdge.query.filter_by(workflow_id=wf.id).delete()
     seen_edges = set()
     for conn in connections:
-        edge_key = (conn["source_job_id"], conn["target_job_id"],
-                     conn.get("trigger_condition", "success"))
+        src_nk = conn.get("source_node_key") or conn["source_job_id"]
+        tgt_nk = conn.get("target_node_key") or conn["target_job_id"]
+        edge_key = (src_nk, tgt_nk, conn.get("trigger_condition", "success"))
         if edge_key in seen_edges:
             continue
         seen_edges.add(edge_key)
@@ -253,6 +269,8 @@ def workflow_save(workflow_id):
             workflow_id=wf.id,
             source_job_id=conn["source_job_id"],
             target_job_id=conn["target_job_id"],
+            source_node_key=conn.get("source_node_key"),
+            target_node_key=conn.get("target_node_key"),
             trigger_condition=conn.get("trigger_condition", "success"),
         ))
 
@@ -276,21 +294,14 @@ def workflow_save(workflow_id):
 
 @bp.route("/history")
 def chain_history_all():
-    """All chain-triggered executions across all workflows."""
+    """All workflow executions across all workflows."""
     executions = (
-        Execution.query.filter(Execution.triggered_by_execution_id.isnot(None))
+        Execution.query.filter(Execution.workflow_id.isnot(None))
         .order_by(Execution.started_at.desc())
         .limit(50)
         .all()
     )
-    # Also include root executions (manually or schedule triggered) that have chain children
-    root_ids = {e.triggered_by_execution_id for e in executions}
-    roots = Execution.query.filter(Execution.id.in_(root_ids)).all() if root_ids else []
-    all_execs = sorted(
-        list({e.id: e for e in executions + roots}.values()),
-        key=lambda e: e.started_at or e.id, reverse=True,
-    )
-    return render_template("chains/history.html", executions=all_execs, workflow=None)
+    return render_template("chains/history.html", executions=executions, workflow=None)
 
 
 @bp.route("/<workflow_id>/history")
@@ -299,14 +310,10 @@ def chain_history(workflow_id):
     wf = db.session.get(Workflow, workflow_id)
     if not wf:
         abort(404)
-    edge_ids = [e.id for e in wf.edges]
-    if edge_ids:
-        executions = (
-            Execution.query.filter(Execution.triggered_by_chain_id.in_(edge_ids))
-            .order_by(Execution.started_at.desc())
-            .limit(50)
-            .all()
-        )
-    else:
-        executions = []
+    executions = (
+        Execution.query.filter(Execution.workflow_id == wf.id)
+        .order_by(Execution.started_at.desc())
+        .limit(50)
+        .all()
+    )
     return render_template("chains/history.html", executions=executions, workflow=wf)
