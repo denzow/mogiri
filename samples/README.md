@@ -55,6 +55,31 @@ Pushover API 経由でスマホにプッシュ通知を送信します。
 | `PUSHOVER_SOUND` | No | 通知音 |
 | `PUSHOVER_DEVICE` | No | 送信先デバイス (default: 全デバイス) |
 
+### [claude_usage_check.py](claude_usage_check.py) - Claude Code 使用量チェック
+
+Claude Code の5時間ウィンドウ制限の残量を推定します。
+CLI の `rate_limit_event` でリセット時刻を取得し、`ccusage` のコストデータと組み合わせて使用率・残りバジェット・バーンレートを表示します。
+
+前提: `claude` CLI と `npx` (Node.js) がインストール済みであること。
+
+| 環境変数 | 必須 | 説明 |
+|---|---|---|
+| `CLAUDE_MODEL` | No | チェック対象モデル (default: CLI のデフォルト) |
+| `CLAUDE_5H_LIMIT_USD` | No | 5時間ウィンドウの推定コスト上限 (default: `148`) |
+
+出力例:
+```
+5-Hour Window:
+  Status: OK
+  Resets: 14:00 JST (3h 44m)
+
+Current Window Usage (estimated limit: $148):
+  Cost:      $9.38 / $148 (6.3% used)
+  Remaining: $138.62 (93.7%)
+  Burn Rate: $14.21/hour
+  At this rate, budget lasts: 9.8 hours
+```
+
 ### [ai_summarize.sh](ai_summarize.sh) - AI 出力要約 (Claude CLI)
 
 前段ジョブの stdout を `claude -p` で要約します。
