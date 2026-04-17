@@ -148,18 +148,31 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
             pass
 
         if entry_nodes:
+            launched = False
             for entry in entry_nodes:
-                node_key = entry.get("node_key")
-                job_id = entry.get("job_id")
+                if isinstance(entry, dict):
+                    node_key = entry.get("node_key")
+                    job_id = entry.get("job_id")
+                elif isinstance(entry, str):
+                    # Legacy string format — look up job_id from node positions
+                    node_key = entry
+                    pos = WorkflowNodePosition.query.filter_by(
+                        workflow_id=wf.id, node_key=entry
+                    ).first()
+                    job_id = pos.job_id if pos else None
+                else:
+                    continue
                 if not job_id:
                     continue
+                launched = True
                 thread = threading.Thread(
                     target=execute_job,
                     args=(job_id,),
                     kwargs={"_workflow_id": wf.id, "_node_key": node_key},
                 )
                 thread.start()
-            return
+            if launched:
+                return
 
         # Fallback: use entry_job_ids (legacy)
         entry_ids = set()
