@@ -6,7 +6,11 @@
 <a href="{{ url_for('chains.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
 
 <div class="page-header">
-    <h1>{{ workflow.name }}</h1>
+    <input type="text" id="wf-name" value="{{ workflow.name }}"
+           style="font-size: 1.5rem; font-weight: 700; border: 1px solid transparent; background: transparent; padding: 0.1rem 0.3rem; border-radius: var(--radius-md); width: auto; min-width: 200px;"
+           onfocus="this.style.borderColor='var(--color-border)'; this.style.background='var(--color-surface)'"
+           onblur="this.style.borderColor='transparent'; this.style.background='transparent'"
+           oninput="markDirty()">
     <div class="actions">
         <button id="run-btn"
                 hx-post="{{ url_for('chains.workflow_run', workflow_id=workflow.id) }}"
@@ -17,9 +21,12 @@
     </div>
 </div>
 
-{% if workflow.description %}
-<p style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 0.75rem;">{{ workflow.description }}</p>
-{% endif %}
+<input type="text" id="wf-description" value="{{ workflow.description or '' }}"
+       placeholder="Description (optional)"
+       style="font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: 0.75rem; border: 1px solid transparent; background: transparent; padding: 0.2rem 0.3rem; border-radius: var(--radius-md); width: 100%;"
+       onfocus="this.style.borderColor='var(--color-border)'; this.style.background='var(--color-surface)'"
+       onblur="this.style.borderColor='transparent'; this.style.background='transparent'"
+       oninput="markDirty()">
 
 <div class="card form-card" style="margin-bottom: 1rem;">
     <div class="card-body">
@@ -381,6 +388,8 @@ document.getElementById('save-btn').addEventListener('click', () => {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
+            name: document.getElementById('wf-name').value,
+            description: document.getElementById('wf-description').value,
             connections,
             node_positions: nodePositions,
             entry_job_ids: [...new Set(entryJobIds)],
