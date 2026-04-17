@@ -296,23 +296,26 @@ def execute_job(
         tmp_script = None
         proc = None
         try:
+            command = job.command.replace("\r\n", "\n").replace("\r", "\n")
             if job.command_type == "python":
                 tmp_script = tempfile.NamedTemporaryFile(
                     mode="w", suffix=".py", delete=False
                 )
-                tmp_script.write(job.command)
+                tmp_script.write(command)
                 tmp_script.close()
                 cmd = [sys.executable, tmp_script.name]
-                shell = False
             else:
-                cmd = job.command
-                shell = True
+                tmp_script = tempfile.NamedTemporaryFile(
+                    mode="w", suffix=".sh", delete=False
+                )
+                tmp_script.write(command)
+                tmp_script.close()
+                cmd = ["bash", tmp_script.name]
 
             cwd = job.working_dir if job.working_dir else None
 
             proc = subprocess.Popen(
                 cmd,
-                shell=shell,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

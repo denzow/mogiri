@@ -51,7 +51,23 @@
 {% else %}
 <div class="editor-layout">
     <div class="editor-sidebar">
-        <div class="editor-sidebar-header">Jobs</div>
+        <div class="editor-sidebar-header" style="display: flex; justify-content: space-between; align-items: center;">
+            Jobs
+            <button type="button" id="quick-job-toggle" class="btn btn-sm" style="padding: 0.15rem 0.5rem; font-size: 0.7rem;" onclick="toggleQuickJobForm()">+ New</button>
+        </div>
+        <div id="quick-job-form" style="display: none; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--color-border); background: #f9fafb;">
+            <input type="text" id="qj-name" placeholder="Job name" style="width: 100%; font-size: 0.8rem; padding: 0.3rem 0.5rem; margin-bottom: 0.4rem;">
+            <div style="display: flex; gap: 0.5rem; margin-bottom: 0.4rem; font-size: 0.75rem;">
+                <label><input type="radio" name="qj-type" value="shell" checked> Shell</label>
+                <label><input type="radio" name="qj-type" value="python"> Python</label>
+            </div>
+            <textarea id="qj-command" placeholder="Command" rows="3" style="width: 100%; font-size: 0.8rem; padding: 0.3rem 0.5rem; font-family: 'SF Mono', monospace; margin-bottom: 0.4rem;"></textarea>
+            <div style="display: flex; gap: 0.3rem;">
+                <button type="button" class="btn btn-primary btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;" onclick="createQuickJob()">Create</button>
+                <button type="button" class="btn btn-sm" style="font-size: 0.7rem; padding: 0.2rem 0.6rem;" onclick="toggleQuickJobForm()">Cancel</button>
+            </div>
+            <div id="qj-error" style="display: none; color: var(--color-error); font-size: 0.75rem; margin-top: 0.3rem;"></div>
+        </div>
         <input type="text" id="job-search" placeholder="Filter..." class="editor-sidebar-search">
         <div id="job-palette" class="editor-sidebar-list"></div>
     </div>
@@ -422,6 +438,62 @@ function escapeHtml(text) {
     const d = document.createElement('div');
     d.textContent = text;
     return d.innerHTML;
+}
+
+// --- Quick job creation ---
+function toggleQuickJobForm() {
+    const form = document.getElementById('quick-job-form');
+    const visible = form.style.display !== 'none';
+    form.style.display = visible ? 'none' : '';
+    if (!visible) document.getElementById('qj-name').focus();
+}
+
+function createQuickJob() {
+    const name = document.getElementById('qj-name').value.trim();
+    const command = document.getElementById('qj-command').value.trim();
+    const commandType = document.querySelector('input[name="qj-type"]:checked').value;
+    const errEl = document.getElementById('qj-error');
+    errEl.style.display = 'none';
+
+    if (!name || !command) {
+        errEl.textContent = 'Name and command are required';
+        errEl.style.display = '';
+        return;
+    }
+
+    fetch('/api/jobs', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            name: name,
+            command: command,
+            command_type: commandType,
+            schedule_type: 'none',
+        }),
+    })
+    .then(r => r.json().then(data => ({ok: r.ok, data})))
+    .then(({ok, data}) => {
+        if (!ok) {
+            errEl.textContent = data.error || 'Failed to create job';
+            errEl.style.display = '';
+            return;
+        }
+        const job = {id: data.id, name: data.name, command_type: data.command_type};
+        allJobs.push(job);
+        jobMap[job.id] = job;
+        renderPalette();
+        addJobNode(job.id);
+        markDirty();
+
+        // Reset form
+        document.getElementById('qj-name').value = '';
+        document.getElementById('qj-command').value = '';
+        document.getElementById('quick-job-form').style.display = 'none';
+    })
+    .catch(e => {
+        errEl.textContent = 'Network error';
+        errEl.style.display = '';
+    });
 }
 </script>
 {% endif %}
