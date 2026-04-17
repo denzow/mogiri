@@ -1,13 +1,15 @@
 """Claude Code usage/rate limit checker for mogiri jobs.
 
-Runs a minimal Claude CLI call with stream-json output to extract
-rate limit information (4-hour and weekly quotas).
+Combines Claude CLI rate_limit_event with ccusage token/cost data
+to estimate remaining quota in the current 5-hour window.
 
 Required:
-  claude CLI must be installed and authenticated
+  - claude CLI must be installed and authenticated
+  - npx (Node.js) for ccusage
 
 Optional environment variables:
-  CLAUDE_MODEL  - Model to check (default: uses CLI default)
+  CLAUDE_MODEL          - Model to check (default: uses CLI default)
+  CLAUDE_5H_LIMIT_USD   - Estimated 5-hour cost limit in USD (default: 148)
 """
 
 import json
@@ -17,7 +19,8 @@ import sys
 from datetime import datetime, timezone
 
 
-def main():
+def get_rate_limits():
+    """Call claude CLI and extract rate_limit_event."""
     cmd = [
         "claude", "-p", "say OK",
         "--output-format", "stream-json", "--verbose",
@@ -27,20 +30,9 @@ def main():
         cmd.extend(["--model", model])
 
     result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-    if result.returncode != 0:
-        # Check if it's a rate limit error
-        stderr = result.stderr.strip()
-        if stderr:
-            print(f"CLI error: {stderr}", file=sys.stderr)
-        # Still try to parse output for rate limit info
-        output = result.stdout
-    else:
-        output = result.stdout
+    output = result.stdout
 
     rate_limits = []
-    usage_info = None
-
     for line in output.strip().split("\n"):
         if not line.strip():
             continue
@@ -48,71 +40,119 @@ def main():
             data = json.loads(line)
         except json.JSONDecodeError:
             continue
-
         if data.get("type") == "rate_limit_event":
             rate_limits.append(data.get("rate_limit_info", {}))
-        elif data.get("type") == "result":
-            usage_info = data.get("usage", {})
 
-    if not rate_limits:
-        print("No rate limit information found.")
-        print("Make sure claude CLI is authenticated and working.")
-        sys.exit(1)
+    return rate_limits
+
+
+def get_ccusage_block():
+    """Call ccusage blocks and return the active block."""
+    try:
+        result = subprocess.run(
+            ["npx", "ccusage@latest", "blocks", "--json"],
+            capture_output=True, text=True, timeout=60,
+        )
+        if result.returncode != 0:
+            return None
+        data = json.loads(result.stdout)
+        for block in data.get("blocks", []):
+            if block.get("isActive"):
+                return block
+    except Exception:
+        pass
+    return None
+
+
+def main():
+    limit_usd = float(os.environ.get("CLAUDE_5H_LIMIT_USD", "148"))
 
     now = datetime.now(timezone.utc)
-    print(f"Claude Code Usage Report ({now.strftime('%Y-%m-%d %H:%M:%S UTC')})")
-    print("=" * 55)
+    print(f"Claude Code Usage Report ({now.astimezone().strftime('%Y-%m-%d %H:%M %Z')})")
+    print("=" * 60)
 
-    for rl in rate_limits:
-        limit_type = rl.get("rateLimitType", "unknown")
-        status = rl.get("status", "unknown")
-        resets_at = rl.get("resetsAt")
-        overage_status = rl.get("overageStatus", "")
-        is_overage = rl.get("isUsingOverage", False)
+    # --- Rate limit status from CLI ---
+    rate_limits = get_rate_limits()
+    if rate_limits:
+        for rl in rate_limits:
+            limit_type = rl.get("rateLimitType", "unknown")
+            status = rl.get("status", "unknown")
+            resets_at = rl.get("resetsAt")
 
-        # Format limit type for display
-        type_label = {
-            "five_hour": "5-Hour Limit",
-            "four_hour": "4-Hour Limit",
-            "weekly": "Weekly Limit",
-            "daily": "Daily Limit",
-        }.get(limit_type, limit_type)
+            type_label = {
+                "five_hour": "5-Hour Window",
+                "four_hour": "4-Hour Window",
+                "weekly": "Weekly",
+                "daily": "Daily",
+            }.get(limit_type, limit_type)
 
-        # Format reset time
-        if resets_at:
-            reset_dt = datetime.fromtimestamp(resets_at, tz=timezone.utc)
-            reset_local = reset_dt.astimezone()
-            remaining = reset_dt - now
-            hours = int(remaining.total_seconds() // 3600)
-            minutes = int((remaining.total_seconds() % 3600) // 60)
-            if remaining.total_seconds() > 0:
-                reset_str = f"resets at {reset_local.strftime('%Y-%m-%d %H:%M %Z')} ({hours}h {minutes}m remaining)"
+            if resets_at:
+                reset_dt = datetime.fromtimestamp(resets_at, tz=timezone.utc)
+                reset_local = reset_dt.astimezone()
+                remaining = reset_dt - now
+                hours = int(remaining.total_seconds() // 3600)
+                minutes = int((remaining.total_seconds() % 3600) // 60)
+                if remaining.total_seconds() > 0:
+                    reset_str = f"{reset_local.strftime('%H:%M %Z')} ({hours}h {minutes}m)"
+                else:
+                    reset_str = "already reset"
             else:
-                reset_str = "already reset"
-        else:
-            reset_str = "unknown"
+                reset_str = "unknown"
 
-        status_icon = "OK" if status == "allowed" else "LIMIT REACHED"
+            status_label = "OK" if status == "allowed" else "LIMIT REACHED"
+            print(f"\n{type_label}:")
+            print(f"  Status: {status_label}")
+            print(f"  Resets: {reset_str}")
+    else:
+        print("\n  Rate limit info: unavailable")
 
-        print(f"\n{type_label}:")
-        print(f"  Status:  {status_icon}")
-        print(f"  Reset:   {reset_str}")
-        if is_overage:
-            print(f"  Overage: active")
-        if overage_status and overage_status != "rejected":
-            print(f"  Overage policy: {overage_status}")
+    # --- Token/cost usage from ccusage ---
+    block = get_ccusage_block()
+    if block:
+        cost = block.get("costUSD", 0)
+        total_tokens = block.get("totalTokens", 0)
+        token_counts = block.get("tokenCounts", {})
+        burn_rate = block.get("burnRate", {})
+        projection = block.get("projection", {})
+        models = block.get("models", [])
 
-    if usage_info:
-        print(f"\nThis check used:")
-        input_tokens = usage_info.get("input_tokens", 0)
-        output_tokens = usage_info.get("output_tokens", 0)
-        cache_read = usage_info.get("cache_read_input_tokens", 0)
-        print(f"  Input: {input_tokens} tokens, Output: {output_tokens} tokens, Cache read: {cache_read} tokens")
+        used_pct = (cost / limit_usd) * 100 if limit_usd > 0 else 0
+        remaining_usd = max(0, limit_usd - cost)
+        remaining_pct = max(0, 100 - used_pct)
+
+        print(f"\nCurrent Window Usage (estimated limit: ${limit_usd:.0f}):")
+        print(f"  Cost:      ${cost:.2f} / ${limit_usd:.0f} ({used_pct:.1f}% used)")
+        print(f"  Remaining: ${remaining_usd:.2f} ({remaining_pct:.1f}%)")
+        print(f"  Tokens:    {total_tokens:,}")
+
+        input_t = token_counts.get("inputTokens", 0)
+        output_t = token_counts.get("outputTokens", 0)
+        cache_create = token_counts.get("cacheCreationInputTokens", 0)
+        cache_read = token_counts.get("cacheReadInputTokens", 0)
+        print(f"    Input: {input_t:,}  Output: {output_t:,}")
+        print(f"    Cache create: {cache_create:,}  Cache read: {cache_read:,}")
+
+        if models:
+            print(f"  Models:    {', '.join(models)}")
+
+        if burn_rate and burn_rate.get("costPerHour"):
+            cph = burn_rate["costPerHour"]
+            hours_left = remaining_usd / cph if cph > 0 else float("inf")
+            print(f"\n  Burn Rate: ${cph:.2f}/hour")
+            if hours_left < 100:
+                print(f"  At this rate, budget lasts: {hours_left:.1f} hours")
+
+        if projection and projection.get("totalCost"):
+            proj_cost = projection["totalCost"]
+            proj_pct = (proj_cost / limit_usd) * 100 if limit_usd > 0 else 0
+            print(f"  Projected window total: ${proj_cost:.2f} ({proj_pct:.0f}%)")
+    else:
+        print("\n  ccusage data: unavailable (npx ccusage not found?)")
 
     print()
 
     # Exit with error if any limit is reached
-    if any(rl.get("status") != "allowed" for rl in rate_limits):
+    if rate_limits and any(rl.get("status") != "allowed" for rl in rate_limits):
         print("WARNING: One or more rate limits reached!")
         sys.exit(1)
 
