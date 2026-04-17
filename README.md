@@ -1,5 +1,10 @@
 <p align="center">
-  <strong style="font-size: 2rem;">mogiri</strong><br>
+  <img src="docs/images/logo.png" alt="mogiri" width="160">
+</p>
+
+<h1 align="center">mogiri</h1>
+
+<p align="center">
   <em>Simple local job manager with Web UI</em>
 </p>
 
