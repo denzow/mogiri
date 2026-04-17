@@ -1,3 +1,4 @@
+import importlib.metadata
 import json
 import os
 import subprocess
@@ -22,6 +23,7 @@ from mogiri.models import Execution, Job, Setting, db
 from mogiri.scheduler import execute_job, register_job, unregister_job
 
 _samples_cache = None
+_packages_cache = None
 
 
 def _get_samples_reference():
@@ -53,6 +55,20 @@ def _get_samples_reference():
 
     _samples_cache = "\n".join(parts)
     return _samples_cache
+
+
+def _get_installed_packages():
+    """Get list of installed Python packages for AI context."""
+    global _packages_cache
+    if _packages_cache is not None:
+        return _packages_cache
+
+    packages = sorted(
+        {d.metadata["Name"] for d in importlib.metadata.distributions()},
+        key=str.lower,
+    )
+    _packages_cache = ", ".join(packages)
+    return _packages_cache
 
 
 def _schedule_ctx(job):
@@ -137,6 +153,7 @@ def job_create():
         schedule_type=_build_schedule(request.form)[0],
         schedule_value=_build_schedule(request.form)[1],
         env_vars=_parse_env_vars(request.form),
+        working_dir=request.form.get("working_dir", "").strip(),
         is_enabled="is_enabled" in request.form,
     )
     db.session.add(job)
@@ -194,6 +211,7 @@ def job_update(job_id):
     job.schedule_type = sched_type
     job.schedule_value = sched_value
     job.env_vars = _parse_env_vars(request.form)
+    job.working_dir = request.form.get("working_dir", "").strip()
     job.is_enabled = "is_enabled" in request.form
 
     db.session.commit()
@@ -284,6 +302,10 @@ def ai_chat():
         "When providing code, always use a fenced code block with the appropriate "
         "language tag (```bash for shell, ```python for Python). "
         "Keep responses concise and focused on the task.\n\n"
+        "The following Python packages are available in the current environment: "
+        + _get_installed_packages() + "\n"
+        "When suggesting Python scripts, prefer using these installed packages. "
+        "If a task requires a package not listed above, mention that it needs to be installed.\n\n"
         + _get_samples_reference()
     )
 

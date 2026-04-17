@@ -261,6 +261,8 @@ def execute_job(
                 cmd = job.command
                 shell = True
 
+            cwd = job.working_dir if job.working_dir else None
+
             result = subprocess.run(
                 cmd,
                 shell=shell,
@@ -268,6 +270,7 @@ def execute_job(
                 text=True,
                 timeout=3600,
                 env=env,
+                cwd=cwd,
             )
             execution.exit_code = result.returncode
             execution.stdout = result.stdout

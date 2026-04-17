@@ -24,6 +24,7 @@ def _job_to_dict(job):
         "schedule_type": job.schedule_type,
         "schedule_value": job.schedule_value or "",
         "env_vars": env,
+        "working_dir": job.working_dir or "",
         "is_enabled": job.is_enabled,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
@@ -79,6 +80,7 @@ def create_job():
         schedule_type=schedule_type,
         schedule_value=data.get("schedule_value", ""),
         env_vars=env_vars,
+        working_dir=data.get("working_dir", ""),
         is_enabled=data.get("is_enabled", True),
     )
     db.session.add(job)
@@ -118,6 +120,8 @@ def update_job(job_id):
         if isinstance(env_vars, dict):
             env_vars = json.dumps(env_vars)
         job.env_vars = env_vars
+    if "working_dir" in data:
+        job.working_dir = data["working_dir"]
     if "is_enabled" in data:
         job.is_enabled = data["is_enabled"]
 

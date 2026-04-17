@@ -59,6 +59,11 @@
 
                     <input type="hidden" id="command" name="command" value="{{ job.command if job else '' }}">
 
+                    <label for="working_dir">Working Directory</label>
+                    <input type="text" id="working_dir" name="working_dir"
+                           value="{{ job.working_dir if job and job.working_dir else '' }}"
+                           placeholder="Leave empty for current directory">
+
                     {% include "partials/cron_editor.html" with context %}
 
                     <label style="margin-top: 1rem;">

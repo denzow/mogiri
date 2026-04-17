@@ -39,6 +39,10 @@
                 <code>{{ job.command }}</code>
                 {% endif %}
             </dd>
+            {% if job.working_dir %}
+            <dt>Working Dir</dt>
+            <dd><code>{{ job.working_dir }}</code></dd>
+            {% endif %}
             <dt>Schedule</dt>
             <dd>
                 {% if job.schedule_type == 'none' %}

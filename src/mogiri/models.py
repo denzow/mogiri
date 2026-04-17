@@ -25,6 +25,7 @@ class Job(db.Model):
     schedule_type = db.Column(db.String, nullable=False)  # "cron", "once", or "none"
     schedule_value = db.Column(db.String, default="")
     env_vars = db.Column(db.Text, default="{}")  # JSON string
+    working_dir = db.Column(db.String, default="")  # Working directory for execution
     is_enabled = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=now)
     updated_at = db.Column(db.DateTime, default=now, onupdate=now)
