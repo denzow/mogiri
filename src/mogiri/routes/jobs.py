@@ -238,6 +238,8 @@ def ai_chat():
     message = data.get("message", "")
     command_type = data.get("command_type", "shell")
     current_command = data.get("current_command", "")
+    job_name = data.get("job_name", "")
+    job_description = data.get("job_description", "")
     history = data.get("history", [])
 
     ai_provider = Setting.get("ai_provider", "claude")
@@ -252,6 +254,11 @@ def ai_chat():
 
     # Build prompt with conversation context
     prompt_parts = []
+    if job_name.strip():
+        job_ctx = f"Job name: {job_name}"
+        if job_description.strip():
+            job_ctx += f"\nJob description: {job_description}"
+        prompt_parts.append(job_ctx)
     if history:
         for msg in history:
             role = "User" if msg.get("role") == "user" else "Assistant"

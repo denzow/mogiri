@@ -96,12 +96,16 @@
             <div class="card-header">AI Assistant</div>
             <div class="chat-messages" id="chat-messages">
                 <div class="chat-welcome">
-                    Ask Claude to help write your command or script.
+                    {% if job %}
+                    Ask AI to modify or improve the current {{ job.command_type }} command.
+                    {% else %}
+                    Ask AI to help write your command or script.
+                    {% endif %}
                 </div>
             </div>
             <div class="chat-input-area">
                 <textarea id="chat-input" rows="3"
-                          placeholder="e.g. Write a Python script that backs up a PostgreSQL database..."
+                          placeholder="{{ 'e.g. Add error handling to this script...' if job else 'e.g. Write a Python script that backs up a PostgreSQL database...' }}"
                           onkeydown="handleChatKeydown(event)"></textarea>
                 <div class="chat-input-actions">
                     <span class="chat-hint">Ctrl+Enter to send</span>
@@ -296,6 +300,8 @@ async function sendChatMessage() {
                 message: message,
                 command_type: getCommandType(),
                 current_command: getCurrentCommand(),
+                job_name: document.getElementById('name').value,
+                job_description: document.getElementById('description').value,
                 history: historyToSend
             })
         });
