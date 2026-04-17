@@ -55,6 +55,30 @@ Pushover API 経由でスマホにプッシュ通知を送信します。
 | `PUSHOVER_SOUND` | No | 通知音 |
 | `PUSHOVER_DEVICE` | No | 送信先デバイス (default: 全デバイス) |
 
+### [ai_summarize.sh](ai_summarize.sh) - AI 出力要約 (Claude CLI)
+
+前段ジョブの stdout を `claude -p` で要約します。
+ワークフロー内で中間処理として使い、要約結果を次のジョブ (Slack通知等) に渡せます。
+
+| 環境変数 | 必須 | 説明 |
+|---|---|---|
+| `AI_PROMPT` | No | カスタムプロンプト (default: 要約指示) |
+| `AI_SYSTEM` | No | システムプロンプト |
+| `AI_MAX_INPUT` | No | 入力最大文字数 (default: `8000`) |
+
+### [ai_log_analyzer.py](ai_log_analyzer.py) - AI ログ分析 (Claude CLI)
+
+ログファイルを `claude -p` で分析し、エラーや異常を検出します。
+日次 cron ジョブとして設定し、アプリケーションログの定期レビューに使えます。
+
+| 環境変数 | 必須 | 説明 |
+|---|---|---|
+| `LOG_FILE` | Yes | 分析対象のログファイルパス |
+| `LOG_TAIL` | No | 分析する末尾行数 (default: `200`) |
+| `LOG_PATTERNS` | No | 注目パターン (default: `error,warn,fail,exception`) |
+| `AI_PROMPT` | No | カスタムプロンプト |
+| `AI_SYSTEM` | No | システムプロンプト |
+
 ### [disk_usage_alert.sh](disk_usage_alert.sh) - ディスク使用量アラート
 
 ディスク使用率が閾値を超えたらアラートを出力しエラー終了します。
@@ -66,6 +90,8 @@ Pushover API 経由でスマホにプッシュ通知を送信します。
 
 ## ワークフロー例
 
+### 障害通知
+
 ```
 [http_health_check] --failure--> [slack_thread_post]
 ```
@@ -74,3 +100,24 @@ Pushover API 経由でスマホにプッシュ通知を送信します。
 1. `http_health_check.py` を `CHECK_URLS=https://example.com` で作成
 2. `slack_thread_post.py` を作成 (SLACK_BOT_TOKEN, SLACK_CHANNEL を設定)
 3. ワークフローで health_check → slack_thread_post を **failure** 条件で接続
+
+### AI 要約 → 通知
+
+```
+[any-job] --any--> [ai_summarize] --success--> [slack_thread_post]
+```
+
+任意のジョブの出力を Claude で要約し、Slack にスレッド投稿:
+1. 分析対象のジョブを作成 (例: `disk_usage_alert.sh`)
+2. `ai_summarize.sh` をチェーンに追加 (**any** 条件)
+3. `slack_thread_post.py` を最後に接続 (**success** 条件)
+
+### 日次ログ分析
+
+```
+[ai_log_analyzer] --failure--> [pushover_notify]
+```
+
+ログにエラーが見つかったら Pushover で通知:
+1. `ai_log_analyzer.py` を `LOG_FILE=/var/log/app.log` で cron 設定 (`0 9 * * *`)
+2. `pushover_notify.py` を **failure** 条件でチェーン
