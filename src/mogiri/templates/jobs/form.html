@@ -2,6 +2,14 @@
 {% block title %}{{ 'Edit' if job else 'New' }} Job - mogiri{% endblock %}
 {% block main_class %}main-wide{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
+{% endblock %}
+
 {% set cron_parts = job.schedule_value.split() if job and job.schedule_type == 'cron' and job.schedule_value and job.schedule_value.split()|length == 5 else ['*','*','*','*','*'] %}
 
 {% block content %}
@@ -45,9 +53,9 @@
 
                     <div id="shell-command" style="{{ 'display:none' if job and job.command_type == 'python' else '' }}">
                         <label for="shell_input">Command</label>
-                        <input type="text" id="shell_input" name="shell_input"
-                               value="{{ job.command if job and job.command_type != 'python' else '' }}"
-                               placeholder="e.g. echo hello">
+                        <textarea id="shell_input" name="shell_input" rows="4"
+                                  class="code-editor"
+                                  placeholder="e.g. echo hello">{{ job.command if job and job.command_type != 'python' else '' }}</textarea>
                     </div>
 
                     <div id="python-command" style="{{ '' if job and job.command_type == 'python' else 'display:none' }}">
@@ -122,7 +130,41 @@
 </div>
 
 <script>
-/* ===== Form functions (existing) ===== */
+/* ===== CodeMirror editors ===== */
+let pythonEditor = null;
+let shellEditor = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const cmOpts = {
+        theme: 'material-darker',
+        lineNumbers: true,
+        indentUnit: 4,
+        tabSize: 4,
+        indentWithTabs: false,
+        lineWrapping: true,
+        viewportMargin: Infinity
+    };
+
+    pythonEditor = CodeMirror.fromTextArea(document.getElementById('python_input'), {
+        ...cmOpts,
+        mode: 'python'
+    });
+    pythonEditor.setSize(null, '280px');
+
+    shellEditor = CodeMirror.fromTextArea(document.getElementById('shell_input'), {
+        ...cmOpts,
+        mode: 'shell'
+    });
+    shellEditor.setSize(null, '100px');
+
+    if (getCommandType() === 'python') {
+        setTimeout(function() { pythonEditor.refresh(); }, 0);
+    } else {
+        setTimeout(function() { shellEditor.refresh(); }, 0);
+    }
+});
+
+/* ===== Form functions ===== */
 function getCommandType() {
     return document.querySelector('input[name="command_type"]:checked').value;
 }
@@ -130,11 +172,21 @@ function toggleCommandType() {
     const isPython = getCommandType() === 'python';
     document.getElementById('shell-command').style.display = isPython ? 'none' : '';
     document.getElementById('python-command').style.display = isPython ? '' : 'none';
+    if (isPython && pythonEditor) {
+        setTimeout(function() { pythonEditor.refresh(); }, 0);
+    } else if (!isPython && shellEditor) {
+        setTimeout(function() { shellEditor.refresh(); }, 0);
+    }
 }
 function syncCommand() {
     const hidden = document.getElementById('command');
-    if (getCommandType() === 'python') hidden.value = document.getElementById('python_input').value;
-    else hidden.value = document.getElementById('shell_input').value;
+    if (getCommandType() === 'python') {
+        if (pythonEditor) pythonEditor.save();
+        hidden.value = document.getElementById('python_input').value;
+    } else {
+        if (shellEditor) shellEditor.save();
+        hidden.value = document.getElementById('shell_input').value;
+    }
 }
 function syncAll() {
     syncCommand();
@@ -157,9 +209,9 @@ let chatHistory = [];
 
 function getCurrentCommand() {
     if (getCommandType() === 'python') {
-        return document.getElementById('python_input').value;
+        return pythonEditor ? pythonEditor.getValue() : document.getElementById('python_input').value;
     }
-    return document.getElementById('shell_input').value;
+    return shellEditor ? shellEditor.getValue() : document.getElementById('shell_input').value;
 }
 
 function handleChatKeydown(e) {
@@ -242,35 +294,31 @@ function applyCode(code, lang) {
     const pythonLangs = ['python', 'py', 'python3'];
     const shellLangs = ['bash', 'sh', 'shell', 'zsh'];
 
-    let targetId;
+    let editor;
     if (pythonLangs.includes(lang.toLowerCase())) {
         document.querySelector('input[name="command_type"][value="python"]').checked = true;
         toggleCommandType();
-        document.getElementById('python_input').value = code;
-        targetId = 'python_input';
+        editor = pythonEditor;
     } else if (shellLangs.includes(lang.toLowerCase())) {
         document.querySelector('input[name="command_type"][value="shell"]').checked = true;
         toggleCommandType();
-        document.getElementById('shell_input').value = code;
-        targetId = 'shell_input';
+        editor = shellEditor;
     } else {
-        if (getCommandType() === 'python') {
-            document.getElementById('python_input').value = code;
-            targetId = 'python_input';
-        } else {
-            document.getElementById('shell_input').value = code;
-            targetId = 'shell_input';
-        }
+        editor = getCommandType() === 'python' ? pythonEditor : shellEditor;
     }
 
-    // Flash highlight on target
-    const target = document.getElementById(targetId);
-    target.style.transition = 'box-shadow 0.3s';
-    target.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
-    setTimeout(function() { target.style.boxShadow = ''; }, 1500);
+    if (editor) {
+        editor.setValue(code);
+    }
 
-    // Scroll form to show the command area
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Flash highlight on the CodeMirror wrapper
+    const target = editor ? editor.getWrapperElement() : null;
+    if (target) {
+        target.style.transition = 'box-shadow 0.3s';
+        target.style.boxShadow = '0 0 0 3px rgba(5, 150, 105, 0.4)';
+        setTimeout(function() { target.style.boxShadow = ''; }, 1500);
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 async function sendChatMessage() {

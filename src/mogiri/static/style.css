@@ -498,7 +498,7 @@ pre.log-output {
     border: 1px solid #334155;
 }
 
-/* ===== Code editor textarea ===== */
+/* ===== Code editor textarea (fallback) ===== */
 .code-editor {
     display: block;
     width: 100%;
@@ -522,6 +522,31 @@ pre.log-output {
 
 .code-editor::placeholder {
     color: #64748b;
+}
+
+/* ===== CodeMirror overrides ===== */
+.CodeMirror.cm-s-material-darker {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: var(--radius-lg);
+    font-family: 'SF Mono', 'Fira Code', 'Fira Mono', 'Roboto Mono', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.7;
+    padding: 0.25rem 0;
+}
+
+.CodeMirror.cm-s-material-darker .CodeMirror-gutters {
+    background: #1e293b;
+    border-right: 1px solid #334155;
+}
+
+.CodeMirror.cm-s-material-darker .CodeMirror-linenumber {
+    color: #475569;
+}
+
+.CodeMirror-focused.cm-s-material-darker {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
 }
 
 /* ===== Forms ===== */
