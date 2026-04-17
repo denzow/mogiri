@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request
 
 from mogiri.models import Execution, Job, Setting, Workflow, db
 from mogiri.scheduler import (
+    cancel_execution,
     execute_job,
     execute_workflow,
     register_job,
@@ -318,6 +319,18 @@ def get_execution(execution_id):
     if not ex:
         return jsonify({"error": "Execution not found"}), 404
     return jsonify(_execution_to_dict(ex, include_output=True))
+
+
+@bp.route("/executions/<execution_id>/cancel", methods=["POST"])
+def cancel_execution_api(execution_id):
+    ex = db.session.get(Execution, execution_id)
+    if not ex:
+        return jsonify({"error": "Execution not found"}), 404
+    if ex.status != "running":
+        return jsonify({"error": "Execution is not running"}), 409
+    if cancel_execution(execution_id):
+        return jsonify({"message": "Cancellation requested"})
+    return jsonify({"error": "Process not found (may have already finished)"}), 409
 
 
 # ---------- Settings API ----------

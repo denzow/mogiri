@@ -1,5 +1,6 @@
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -16,6 +17,10 @@ from mogiri.models import (
 
 scheduler = BackgroundScheduler()
 _app = None
+
+# Registry of running processes: execution_id -> subprocess.Popen
+_running_processes = {}
+_running_lock = threading.Lock()
 
 
 def init_scheduler(app):
@@ -123,6 +128,34 @@ def unregister_workflow(wf_id):
         scheduler.remove_job(f"wf:{wf_id}")
     except Exception:
         pass
+
+
+# ---------- Cancellation ----------
+
+_is_cancelled = set()
+
+
+def _kill_process(proc):
+    """Kill a process and its children."""
+    try:
+        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        pass
+    try:
+        proc.kill()
+    except (OSError, ProcessLookupError):
+        pass
+
+
+def cancel_execution(execution_id: str) -> bool:
+    """Cancel a running execution. Returns True if cancellation was initiated."""
+    with _running_lock:
+        proc = _running_processes.get(execution_id)
+    if proc is None:
+        return False
+    _is_cancelled.add(execution_id)
+    _kill_process(proc)
+    return True
 
 
 # ---------- Workflow execution ----------
@@ -261,6 +294,7 @@ def execute_job(
                 env["MOGIRI_PARENT_JOB_NAME"] = parent_job.name if parent_job else ""
 
         tmp_script = None
+        proc = None
         try:
             if job.command_type == "python":
                 tmp_script = tempfile.NamedTemporaryFile(
@@ -276,29 +310,48 @@ def execute_job(
 
             cwd = job.working_dir if job.working_dir else None
 
-            result = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
                 shell=shell,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=3600,
                 env=env,
                 cwd=cwd,
+                start_new_session=True,
             )
-            execution.exit_code = result.returncode
-            execution.stdout = result.stdout
-            execution.stderr = result.stderr
-            execution.status = "success" if result.returncode == 0 else "failed"
-        except subprocess.TimeoutExpired as e:
-            execution.stdout = e.stdout or ""
-            execution.stderr = e.stderr or ""
-            execution.status = "timeout"
-            execution.exit_code = -1
+            with _running_lock:
+                _running_processes[execution.id] = proc
+
+            try:
+                stdout, stderr = proc.communicate(timeout=3600)
+            except subprocess.TimeoutExpired:
+                _kill_process(proc)
+                stdout, stderr = proc.communicate()
+                execution.stdout = stdout or ""
+                execution.stderr = stderr or ""
+                execution.status = "timeout"
+                execution.exit_code = -1
+            else:
+                # Check if cancelled during execution
+                if execution.id in _is_cancelled:
+                    execution.stdout = stdout or ""
+                    execution.stderr = stderr or ""
+                    execution.status = "cancelled"
+                    execution.exit_code = -1
+                else:
+                    execution.exit_code = proc.returncode
+                    execution.stdout = stdout or ""
+                    execution.stderr = stderr or ""
+                    execution.status = "success" if proc.returncode == 0 else "failed"
         except Exception as e:
             execution.stderr = str(e)
             execution.status = "failed"
             execution.exit_code = -1
         finally:
+            with _running_lock:
+                _running_processes.pop(execution.id, None)
+            _is_cancelled.discard(execution.id)
             if tmp_script is not None:
                 try:
                     os.unlink(tmp_script.name)
@@ -308,7 +361,8 @@ def execute_job(
             db.session.commit()
 
             # Only trigger chains when running as part of a workflow
-            if _workflow_id:
+            # Don't trigger chains if cancelled
+            if _workflow_id and execution.status != "cancelled":
                 _trigger_chains(execution, _workflow_id, _node_key, chain_visited)
 
 

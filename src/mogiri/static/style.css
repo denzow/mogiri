@@ -275,7 +275,8 @@ code {
 .badge-success  { background: var(--color-success-bg); color: var(--color-success); }
 .badge-failed   { background: var(--color-error-bg);   color: var(--color-error); }
 .badge-running  { background: var(--color-info-bg);    color: var(--color-info); }
-.badge-timeout  { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-timeout    { background: var(--color-warning-bg); color: var(--color-warning); }
+.badge-cancelled { background: #f3f4f6; color: #6b7280; }
 .badge-enabled  { background: var(--color-success-bg); color: var(--color-success); }
 .badge-disabled { background: #f3f4f6; color: var(--color-text-muted); }
 .badge-shell    { background: #f3f4f6; color: #475569; }

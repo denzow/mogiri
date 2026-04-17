@@ -47,6 +47,8 @@
                     <span class="badge badge-running">Running</span>
                     {% elif exec.status == 'timeout' %}
                     <span class="badge badge-timeout">Timeout</span>
+                    {% elif exec.status == 'cancelled' %}
+                    <span class="badge badge-cancelled">Cancelled</span>
                     {% endif %}
                     {% if exec.workflow_id %}
                     <a href="{{ url_for('chains.workflow_editor', workflow_id=exec.workflow_id) }}"

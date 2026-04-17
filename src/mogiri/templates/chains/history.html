@@ -37,6 +37,8 @@
                     <span class="badge badge-running">Running</span>
                     {% elif exec.status == 'timeout' %}
                     <span class="badge badge-timeout">Timeout</span>
+                    {% elif exec.status == 'cancelled' %}
+                    <span class="badge badge-cancelled">Cancelled</span>
                     {% endif %}
                     {% if exec.triggered_by_execution_id %}
                     <span class="badge badge-chain" style="margin-left: 0.3rem;">chain</span>

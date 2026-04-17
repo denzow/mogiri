@@ -22,6 +22,8 @@
                     <span class="badge badge-running">Running</span>
                     {% elif exec.status == 'timeout' %}
                     <span class="badge badge-timeout">Timeout</span>
+                    {% elif exec.status == 'cancelled' %}
+                    <span class="badge badge-cancelled">Cancelled</span>
                     {% endif %}
                     {% if exec.workflow_id %}
                     <a href="{{ url_for('chains.workflow_editor', workflow_id=exec.workflow_id) }}"
@@ -35,7 +37,15 @@
                     {{ (exec.finished_at - exec.started_at).total_seconds()|round(1) }}s
                     {% else %}-{% endif %}
                 </td>
-                <td><a href="{{ url_for('executions.execution_detail', execution_id=exec.id) }}" class="btn btn-sm">Log</a></td>
+                <td>
+                    {% if exec.status == 'running' %}
+                    <button hx-post="{{ url_for('executions.execution_cancel', execution_id=exec.id) }}"
+                            hx-confirm="Cancel this execution?"
+                            hx-swap="none"
+                            class="btn btn-danger btn-sm" style="margin-right: 0.25rem;">Cancel</button>
+                    {% endif %}
+                    <a href="{{ url_for('executions.execution_detail', execution_id=exec.id) }}" class="btn btn-sm">Log</a>
+                </td>
             </tr>
             {% endfor %}
         </tbody>

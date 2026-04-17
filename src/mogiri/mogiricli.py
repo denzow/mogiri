@@ -456,6 +456,20 @@ def executions_get(ctx, execution_id):
         click.echo(stderr)
 
 
+@executions.command("cancel")
+@click.argument("execution_id")
+@click.pass_context
+def executions_cancel(ctx, execution_id):
+    """Cancel a running execution."""
+    client = ctx.obj["client"]
+    execution_id = _resolve_id(client, "executions", execution_id)
+    result = client.post(f"/api/executions/{execution_id}/cancel")
+    if ctx.obj["json"]:
+        _output(ctx, result)
+    else:
+        click.echo(result.get("message", "Cancelled"))
+
+
 # ---------- Settings ----------
 
 @cli.group()
