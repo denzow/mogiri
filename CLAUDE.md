@@ -58,13 +58,15 @@ src/mogiri/
   scheduler.py       # APScheduler init, sync_all, execute_job, execute_workflow,
                      #   chain triggering, log rotation
   cli.py             # Click CLI entry point (mogiri serve, mogiri init)
+  mogiricli.py       # CLI client (mogiricli) — wraps REST API for terminal/Claude Code use
   routes/
     __init__.py      # register_routes — wires all blueprints
+    api.py           # REST API: /api/jobs, /api/workflows, /api/executions, /api/settings
     dashboard.py     # GET / — overview with recent executions
-    jobs.py          # Job CRUD, toggle, run-now, cron preview
+    jobs.py          # Job CRUD, toggle, run-now, cron preview, AI chat
     executions.py    # GET /executions/<id> — log viewer
     chains.py        # Workflow CRUD, visual editor, run, history
-    settings.py      # Global settings (environment variables)
+    settings.py      # Global settings (environment variables, AI provider)
   templates/         # Jinja2 templates (base.html, jobs/, executions/, chains/, settings/, partials/)
   static/style.css   # Status colors, log output styling
 migrations/          # Alembic migrations directory
@@ -104,4 +106,60 @@ Priority: env vars > YAML > defaults. CLI flags (`--host`, `--port`) override YA
 - **Workflow**: name, description, is_enabled, schedule_type, schedule_value, entry_job_ids (JSON), start_node_x/y
 - **WorkflowEdge**: workflow_id (FK), source_job_id (FK), target_job_id (FK), trigger_condition (success/failure/any)
 - **WorkflowNodePosition**: workflow_id (FK), job_id (FK), node_key, x, y
-- **Setting**: key-value store (used for global_env_vars)
+- **Setting**: key-value store (used for global_env_vars, ai_provider)
+
+## REST API
+
+Base URL: `http://127.0.0.1:8899/api`
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/jobs` | List all jobs |
+| GET | `/api/jobs/<id>` | Get job details |
+| POST | `/api/jobs` | Create job (requires `name`, `command`) |
+| PATCH | `/api/jobs/<id>` | Partial update job |
+| DELETE | `/api/jobs/<id>` | Delete job |
+| POST | `/api/jobs/<id>/run` | Trigger job execution (202) |
+| GET | `/api/workflows` | List all workflows |
+| GET | `/api/workflows/<id>` | Get workflow details (includes edges) |
+| POST | `/api/workflows` | Create workflow (requires `name`) |
+| PATCH | `/api/workflows/<id>` | Update workflow |
+| DELETE | `/api/workflows/<id>` | Delete workflow |
+| POST | `/api/workflows/<id>/run` | Trigger workflow execution (202) |
+| GET | `/api/executions` | List executions (`?job_id=`, `?workflow_id=`, `?limit=`) |
+| GET | `/api/executions/<id>` | Get execution with stdout/stderr |
+| GET | `/api/settings/<key>` | Get setting value |
+| PUT | `/api/settings/<key>` | Set setting value (`{"value": "..."}`) |
+
+## mogiricli
+
+CLI client for mogiri. Requires the server to be running.
+
+```bash
+# Configure server URL (default: http://127.0.0.1:8899)
+export MOGIRI_URL=http://127.0.0.1:8899
+
+# Jobs
+mogiricli jobs list
+mogiricli jobs get <id>
+mogiricli jobs create --name "Job" --command "echo hi"
+mogiricli jobs update <id> --name "New Name"
+mogiricli jobs delete <id> --yes
+mogiricli jobs run <id>
+
+# Workflows
+mogiricli workflows list
+mogiricli workflows create --name "WF"
+mogiricli workflows run <id>
+
+# Executions
+mogiricli executions list --job-id <id> --limit 10
+mogiricli executions get <id>
+
+# Settings
+mogiricli settings get ai_provider
+mogiricli settings set ai_provider gemini
+
+# JSON output (for scripting / Claude Code)
+mogiricli --json jobs list
+```

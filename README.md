@@ -9,6 +9,10 @@
 - **環境変数** — ジョブごとにカスタム環境変数を設定可能
 - **実行ログ** — stdout/stderrを保存し、Web UIから閲覧
 - **ログローテーション** — 日数・件数ベースで古いログを自動削除
+- **ワークフロー** — 複数ジョブをDAGで連結し、成功/失敗条件で分岐実行
+- **AI アシスタント** — ジョブ作成画面でClaude/Gemini CLIによるスクリプト生成支援
+- **REST API** — ジョブ・ワークフロー・実行履歴・設定のJSON API
+- **CLI クライアント** — `mogiricli` コマンドでターミナルからジョブ管理
 - **YAML設定** — `~/.mogiri/config.yaml` で設定を管理
 - **Web UI** — モダンなUIでジョブ管理（htmx による部分更新）
 
@@ -112,6 +116,99 @@ FLASK_APP=mogiri.app flask db upgrade
 ```
 
 `mogiri serve` 起動時に未適用のマイグレーションは自動で適用されます。
+
+## CLI クライアント (mogiricli)
+
+mogiriサーバーの REST API をラップした CLI ツールです。ターミナルや Claude Code からジョブ・ワークフローを操作できます。
+
+```bash
+# サーバーURLの設定（デフォルト: http://127.0.0.1:8899）
+export MOGIRI_URL=http://127.0.0.1:8899
+```
+
+### ジョブ管理
+
+```bash
+# 一覧
+mogiricli jobs list
+
+# 詳細
+mogiricli jobs get <id>
+
+# 作成
+mogiricli jobs create --name "バックアップ" --command "pg_dump mydb" --command-type shell
+mogiricli jobs create --name "ヘルスチェック" --command "$(cat script.py)" --command-type python
+
+# 更新
+mogiricli jobs update <id> --name "新しい名前" --schedule-type cron --schedule-value "0 * * * *"
+
+# 削除
+mogiricli jobs delete <id> --yes
+
+# 即時実行
+mogiricli jobs run <id>
+```
+
+### ワークフロー管理
+
+```bash
+mogiricli workflows list
+mogiricli workflows create --name "監視フロー"
+mogiricli workflows run <id>
+mogiricli workflows delete <id> --yes
+```
+
+### 実行履歴
+
+```bash
+# 直近の実行一覧
+mogiricli executions list --limit 10
+
+# 特定ジョブの実行履歴
+mogiricli executions list --job-id <id>
+
+# 実行詳細（stdout/stderr含む）
+mogiricli executions get <execution-id>
+```
+
+### 設定
+
+```bash
+mogiricli settings get ai_provider
+mogiricli settings set ai_provider gemini
+```
+
+### JSON 出力
+
+`--json` フラグで JSON 形式の出力に切り替えられます。スクリプトや Claude Code との連携に便利です。
+
+```bash
+mogiricli --json jobs list
+mogiricli --json executions get <id>
+```
+
+## REST API
+
+mogiriサーバーは JSON API を提供しています。`mogiricli` はこの API のラッパーです。
+
+| メソッド | パス | 説明 |
+|----------|------|------|
+| `GET` | `/api/jobs` | ジョブ一覧 |
+| `GET` | `/api/jobs/<id>` | ジョブ詳細 |
+| `POST` | `/api/jobs` | ジョブ作成 |
+| `PATCH` | `/api/jobs/<id>` | ジョブ更新 |
+| `DELETE` | `/api/jobs/<id>` | ジョブ削除 |
+| `POST` | `/api/jobs/<id>/run` | ジョブ即時実行 |
+| `GET` | `/api/workflows` | ワークフロー一覧 |
+| `GET` | `/api/workflows/<id>` | ワークフロー詳細 |
+| `POST` | `/api/workflows` | ワークフロー作成 |
+| `PATCH` | `/api/workflows/<id>` | ワークフロー更新 |
+| `DELETE` | `/api/workflows/<id>` | ワークフロー削除 |
+| `POST` | `/api/workflows/<id>/run` | ワークフロー実行 |
+| `GET` | `/api/executions` | 実行履歴一覧 (`?job_id=`, `?workflow_id=`, `?limit=`) |
+| `GET` | `/api/executions/<id>` | 実行詳細 (stdout/stderr含む) |
+| `GET` | `/api/settings/<key>` | 設定取得 |
+| `PUT` | `/api/settings/<key>` | 設定更新 |
 
 ## Data
 
