@@ -1,5 +1,14 @@
 {% extends "base.html" %}
 {% block title %}{{ job.name }} - mogiri{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
+{% endblock %}
+
 {% block content %}
 <a href="{{ url_for('jobs.job_list') }}" class="back-link">&larr; Back to Jobs</a>
 
@@ -33,11 +42,7 @@
             <dd><span class="badge {% if job.command_type == 'python' %}badge-python{% else %}badge-shell{% endif %}">{{ job.command_type|capitalize }}</span></dd>
             <dt>Command</dt>
             <dd>
-                {% if job.command_type == 'python' %}
-                <pre class="log-output" style="margin: 0;">{{ job.command }}</pre>
-                {% else %}
-                <code>{{ job.command }}</code>
-                {% endif %}
+                <textarea id="command-view" style="display:none;">{{ job.command }}</textarea>
             </dd>
             {% if job.working_dir %}
             <dt>Working Dir</dt>
@@ -75,4 +80,19 @@
 <div id="execution-list" hx-get="{{ url_for('jobs.job_executions', job_id=job.id) }}" hx-trigger="every 5s">
 {% include "partials/execution_list.html" %}
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var el = document.getElementById('command-view');
+    var editor = CodeMirror.fromTextArea(el, {
+        mode: '{{ "python" if job.command_type == "python" else "shell" }}',
+        theme: 'material-darker',
+        lineNumbers: true,
+        readOnly: true,
+        viewportMargin: Infinity,
+        lineWrapping: true
+    });
+    editor.setSize(null, null);
+});
+</script>
 {% endblock %}

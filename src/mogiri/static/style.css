@@ -549,6 +549,10 @@ pre.log-output {
     box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
 }
 
+.CodeMirror.cm-s-material-darker.CodeMirror-readonly .CodeMirror-cursor {
+    display: none;
+}
+
 /* ===== Forms ===== */
 .form-card {
     max-width: 680px;
