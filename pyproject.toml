@@ -21,6 +21,7 @@ dev = [
 
 [project.scripts]
 mogiri = "mogiri.cli:main"
+mogiricli = "mogiri.mogiricli:cli"
 
 [build-system]
 requires = ["setuptools>=68.0"]
