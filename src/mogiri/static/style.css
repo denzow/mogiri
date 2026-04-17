@@ -984,6 +984,23 @@ pre.log-output {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.palette-item-link {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    flex-shrink: 0;
+    padding: 0.1rem 0.25rem;
+    border-radius: var(--radius-sm);
+    line-height: 1;
+}
+
+.palette-item-link:hover {
+    color: var(--color-primary);
+    background: var(--color-primary-light);
 }
 
 .palette-empty {

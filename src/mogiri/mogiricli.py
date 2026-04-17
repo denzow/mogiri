@@ -85,6 +85,22 @@ def _short_id(uid):
     return uid[:8] if uid else ""
 
 
+def _resolve_id(client, resource, short_id):
+    """Resolve a short ID prefix to a full UUID by listing all resources."""
+    if len(short_id) >= 32:
+        return short_id
+    items = client.get(f"/api/{resource}")
+    matches = [item["id"] for item in items if item["id"].startswith(short_id)]
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) == 0:
+        raise click.ClickException(f"No {resource[:-1]} found matching '{short_id}'")
+    raise click.ClickException(
+        f"Ambiguous ID '{short_id}' matches {len(matches)} {resource}: "
+        + ", ".join(_short_id(m) for m in matches)
+    )
+
+
 # ---------- Top-level group ----------
 
 @click.group()
@@ -134,6 +150,7 @@ def jobs_list(ctx):
 def jobs_get(ctx, job_id):
     """Get job details."""
     client = ctx.obj["client"]
+    job_id = _resolve_id(client, "jobs", job_id)
     j = client.get(f"/api/jobs/{job_id}")
     if ctx.obj["json"]:
         _output(ctx, j)
@@ -199,6 +216,7 @@ def jobs_update(ctx, job_id, name, cmd, command_type, schedule_type,
                 schedule_value, working_dir, description, enabled):
     """Update a job."""
     client = ctx.obj["client"]
+    job_id = _resolve_id(client, "jobs", job_id)
     data = {}
     if name is not None:
         data["name"] = name
@@ -232,6 +250,7 @@ def jobs_update(ctx, job_id, name, cmd, command_type, schedule_type,
 def jobs_delete(ctx, job_id, yes):
     """Delete a job."""
     client = ctx.obj["client"]
+    job_id = _resolve_id(client, "jobs", job_id)
     if not yes:
         click.confirm(f"Delete job {job_id}?", abort=True)
     result = client.delete(f"/api/jobs/{job_id}")
@@ -247,6 +266,7 @@ def jobs_delete(ctx, job_id, yes):
 def jobs_run(ctx, job_id):
     """Trigger a job run."""
     client = ctx.obj["client"]
+    job_id = _resolve_id(client, "jobs", job_id)
     result = client.post(f"/api/jobs/{job_id}/run")
     if ctx.obj["json"]:
         _output(ctx, result)
@@ -289,6 +309,7 @@ def workflows_list(ctx):
 def workflows_get(ctx, workflow_id):
     """Get workflow details."""
     client = ctx.obj["client"]
+    workflow_id = _resolve_id(client, "workflows", workflow_id)
     wf = client.get(f"/api/workflows/{workflow_id}")
     if ctx.obj["json"]:
         _output(ctx, wf)
@@ -333,6 +354,7 @@ def workflows_create(ctx, name, description, schedule_type, schedule_value):
 def workflows_delete(ctx, workflow_id, yes):
     """Delete a workflow."""
     client = ctx.obj["client"]
+    workflow_id = _resolve_id(client, "workflows", workflow_id)
     if not yes:
         click.confirm(f"Delete workflow {workflow_id}?", abort=True)
     result = client.delete(f"/api/workflows/{workflow_id}")
@@ -348,6 +370,7 @@ def workflows_delete(ctx, workflow_id, yes):
 def workflows_run(ctx, workflow_id):
     """Trigger a workflow run."""
     client = ctx.obj["client"]
+    workflow_id = _resolve_id(client, "workflows", workflow_id)
     result = client.post(f"/api/workflows/{workflow_id}/run")
     if ctx.obj["json"]:
         _output(ctx, result)
@@ -371,6 +394,10 @@ def executions():
 def executions_list(ctx, job_id, workflow_id, limit):
     """List executions."""
     client = ctx.obj["client"]
+    if job_id:
+        job_id = _resolve_id(client, "jobs", job_id)
+    if workflow_id:
+        workflow_id = _resolve_id(client, "workflows", workflow_id)
     params = [f"limit={limit}"]
     if job_id:
         params.append(f"job_id={job_id}")
@@ -407,6 +434,7 @@ def executions_list(ctx, job_id, workflow_id, limit):
 def executions_get(ctx, execution_id):
     """Get execution details with output."""
     client = ctx.obj["client"]
+    execution_id = _resolve_id(client, "executions", execution_id)
     ex = client.get(f"/api/executions/{execution_id}")
     if ctx.obj["json"]:
         _output(ctx, ex)

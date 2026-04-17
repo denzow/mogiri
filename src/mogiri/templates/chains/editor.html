@@ -123,6 +123,7 @@ function renderPalette() {
             item.innerHTML = `
                 <span class="palette-item-name">${escapeHtml(job.name)}</span>
                 <span class="badge ${badgeClass}" style="font-size:0.55rem;">${job.command_type}</span>
+                <a href="/jobs/${job.id}/edit" class="palette-item-link" title="Edit job" onclick="event.stopPropagation();">&#x2197;</a>
             `;
             item.addEventListener('click', () => { addJobNode(job.id); markDirty(); });
             palette.appendChild(item);
