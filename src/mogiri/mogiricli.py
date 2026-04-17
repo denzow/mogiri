@@ -260,6 +260,24 @@ def jobs_delete(ctx, job_id, yes):
         click.echo(result["message"])
 
 
+@jobs.command("copy")
+@click.argument("job_id")
+@click.option("--name", default=None, help="Name for the copied job")
+@click.pass_context
+def jobs_copy(ctx, job_id, name):
+    """Copy a job."""
+    client = ctx.obj["client"]
+    job_id = _resolve_id(client, "jobs", job_id)
+    data = {}
+    if name:
+        data["name"] = name
+    j = client.post(f"/api/jobs/{job_id}/copy", data)
+    if ctx.obj["json"]:
+        _output(ctx, j)
+    else:
+        click.echo(f"Copied job: {j['name']} ({j['id']})")
+
+
 @jobs.command("run")
 @click.argument("job_id")
 @click.pass_context

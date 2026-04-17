@@ -10,15 +10,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
 {% endblock %}
 
-{% set cron_parts = job.schedule_value.split() if job and job.schedule_type == 'cron' and job.schedule_value and job.schedule_value.split()|length == 5 else ['*','*','*','*','*'] %}
+{# For copy mode: use source job values but treat as new job creation #}
+{% set src = copy_source if copy_source is defined and copy_source else None %}
+{% set j = src or job %}
+{% set cron_parts = j.schedule_value.split() if j and j.schedule_type == 'cron' and j.schedule_value and j.schedule_value.split()|length == 5 else ['*','*','*','*','*'] %}
 
 {% block content %}
-<a href="{{ url_for('jobs.job_detail', job_id=job.id) if job else url_for('jobs.job_list') }}" class="back-link">
-    &larr; {{ 'Back to ' + job.name if job else 'Back to Jobs' }}
+<a href="{{ url_for('jobs.job_detail', job_id=job.id) if job else (url_for('jobs.job_detail', job_id=src.id) if src else url_for('jobs.job_list')) }}" class="back-link">
+    &larr; {{ 'Back to ' + job.name if job else ('Back to ' + src.name if src else 'Back to Jobs') }}
 </a>
 
 <div class="page-header">
-    <h1>{{ 'Edit Job' if job else 'New Job' }}</h1>
+    <h1>{{ 'Edit Job' if job else ('Copy Job' if src else 'New Job') }}</h1>
 </div>
 
 <div class="form-with-chat">
@@ -28,62 +31,62 @@
                 <form method="post" action="{{ url_for('jobs.job_update', job_id=job.id) if job else url_for('jobs.job_create') }}"
                       onsubmit="syncAll()">
                     <label for="name">Name</label>
-                    <input type="text" id="name" name="name" value="{{ job.name if job else '' }}" required
+                    <input type="text" id="name" name="name" value="{{ job.name if job else (src.name + ' (Copy)' if src else '') }}" required
                            placeholder="My backup job">
 
                     <label for="description">Description</label>
                     <textarea id="description" name="description" rows="2"
-                              placeholder="What this job does (optional)">{{ job.description if job else '' }}</textarea>
+                              placeholder="What this job does (optional)">{{ j.description if j else '' }}</textarea>
 
                     <label>Command Type</label>
                     <div class="schedule-radios">
                         <label>
                             <input type="radio" name="command_type" value="shell"
-                                   {{ 'checked' if not job or job.command_type == 'shell' else '' }}
+                                   {{ 'checked' if not j or j.command_type == 'shell' else '' }}
                                    onchange="toggleCommandType()">
                             Shell
                         </label>
                         <label>
                             <input type="radio" name="command_type" value="python"
-                                   {{ 'checked' if job and job.command_type == 'python' else '' }}
+                                   {{ 'checked' if j and j.command_type == 'python' else '' }}
                                    onchange="toggleCommandType()">
                             Python
                         </label>
                     </div>
 
-                    <div id="shell-command" style="{{ 'display:none' if job and job.command_type == 'python' else '' }}">
+                    <div id="shell-command" style="{{ 'display:none' if j and j.command_type == 'python' else '' }}">
                         <label for="shell_input">Command</label>
                         <textarea id="shell_input" name="shell_input" rows="4"
                                   class="code-editor"
-                                  placeholder="e.g. echo hello">{{ job.command if job and job.command_type != 'python' else '' }}</textarea>
+                                  placeholder="e.g. echo hello">{{ j.command if j and j.command_type != 'python' else '' }}</textarea>
                     </div>
 
-                    <div id="python-command" style="{{ '' if job and job.command_type == 'python' else 'display:none' }}">
+                    <div id="python-command" style="{{ '' if j and j.command_type == 'python' else 'display:none' }}">
                         <label for="python_input">Python Script</label>
                         <textarea id="python_input" name="python_input" rows="12"
                                   class="code-editor"
-                                  placeholder="import os&#10;print('Hello from mogiri!')">{{ job.command if job and job.command_type == 'python' else '' }}</textarea>
+                                  placeholder="import os&#10;print('Hello from mogiri!')">{{ j.command if j and j.command_type == 'python' else '' }}</textarea>
                     </div>
 
-                    <input type="hidden" id="command" name="command" value="{{ job.command if job else '' }}">
+                    <input type="hidden" id="command" name="command" value="{{ j.command if j else '' }}">
 
                     <label for="working_dir">Working Directory</label>
                     <input type="text" id="working_dir" name="working_dir"
-                           value="{{ job.working_dir if job and job.working_dir else '' }}"
+                           value="{{ j.working_dir if j and j.working_dir else '' }}"
                            placeholder="Leave empty for current directory">
 
                     {% include "partials/cron_editor.html" with context %}
 
                     <label style="margin-top: 1rem;">
                         <input type="checkbox" id="is_enabled" name="is_enabled"
-                               {{ 'checked' if not job or job.is_enabled else '' }}>
+                               {{ 'checked' if not j or j.is_enabled else '' }}>
                         Enabled
                     </label>
 
                     <label>Environment Variables</label>
                     <div id="env-vars-container">
-                        {% if job and job.env_vars and job.env_vars != '{}' %}
-                            {% for key, value in (job.env_vars | from_json).items() %}
+                        {% if j and j.env_vars and j.env_vars != '{}' %}
+                            {% for key, value in (j.env_vars | from_json).items() %}
                             <div class="env-var-row">
                                 <input type="text" name="env_key" value="{{ key }}" placeholder="KEY">
                                 <input type="text" name="env_value" value="{{ value }}" placeholder="VALUE">
@@ -109,8 +112,8 @@
             <div class="card-header">AI Assistant</div>
             <div class="chat-messages" id="chat-messages">
                 <div class="chat-welcome">
-                    {% if job %}
-                    Ask AI to modify or improve the current {{ job.command_type }} command.
+                    {% if j %}
+                    Ask AI to modify or improve the current {{ j.command_type }} command.
                     {% else %}
                     Ask AI to help write your command or script.
                     {% endif %}
@@ -149,13 +152,13 @@ document.addEventListener('DOMContentLoaded', function() {
         ...cmOpts,
         mode: 'python'
     });
-    pythonEditor.setSize(null, '280px');
+    pythonEditor.setSize(null, '500px');
 
     shellEditor = CodeMirror.fromTextArea(document.getElementById('shell_input'), {
         ...cmOpts,
         mode: 'shell'
     });
-    shellEditor.setSize(null, '100px');
+    shellEditor.setSize(null, '500px');
 
     if (getCommandType() === 'python') {
         setTimeout(function() { pythonEditor.refresh(); }, 0);
@@ -247,47 +250,70 @@ function addChatMessage(role, content) {
 
 function renderChatMarkdown(contentEl, text) {
     contentEl.innerHTML = '';
-    const parts = text.split(/(```[\s\S]*?```)/g);
+    const lines = text.split('\n');
+    let inCode = false;
+    let codeLang = '';
+    let codeLines = [];
+    let textBuf = '';
 
-    for (const part of parts) {
-        if (part.startsWith('```')) {
-            const match = part.match(/```(\w*)\n?([\s\S]*?)```/);
-            if (match) {
-                const lang = match[1] || '';
-                const code = match[2].replace(/^\n|\n$/g, '');
+    function flushText() {
+        if (textBuf.trim()) {
+            const el = document.createElement('div');
+            el.className = 'chat-text';
+            el.textContent = textBuf;
+            contentEl.appendChild(el);
+        }
+        textBuf = '';
+    }
 
-                const block = document.createElement('div');
-                block.className = 'chat-code-block';
+    function flushCode() {
+        const code = codeLines.join('\n');
+        const block = document.createElement('div');
+        block.className = 'chat-code-block';
 
-                const header = document.createElement('div');
-                header.className = 'chat-code-header';
+        const header = document.createElement('div');
+        header.className = 'chat-code-header';
 
-                const langSpan = document.createElement('span');
-                langSpan.textContent = lang || 'code';
-                header.appendChild(langSpan);
+        const langSpan = document.createElement('span');
+        langSpan.textContent = codeLang || 'code';
+        header.appendChild(langSpan);
 
-                const applyBtn = document.createElement('button');
-                applyBtn.className = 'chat-apply-btn';
-                applyBtn.textContent = 'Apply';
-                applyBtn.onclick = function() { applyCode(code, lang); };
-                header.appendChild(applyBtn);
+        const applyBtn = document.createElement('button');
+        applyBtn.className = 'chat-apply-btn';
+        applyBtn.textContent = 'Apply';
+        applyBtn.onclick = function() { applyCode(code, codeLang); };
+        header.appendChild(applyBtn);
 
-                const pre = document.createElement('pre');
-                const codeEl = document.createElement('code');
-                codeEl.textContent = code;
-                pre.appendChild(codeEl);
+        const pre = document.createElement('pre');
+        const codeEl = document.createElement('code');
+        codeEl.textContent = code;
+        pre.appendChild(codeEl);
 
-                block.appendChild(header);
-                block.appendChild(pre);
-                contentEl.appendChild(block);
-            }
-        } else if (part.trim()) {
-            const textEl = document.createElement('div');
-            textEl.className = 'chat-text';
-            textEl.textContent = part;
-            contentEl.appendChild(textEl);
+        block.appendChild(header);
+        block.appendChild(pre);
+        contentEl.appendChild(block);
+        codeLines = [];
+        codeLang = '';
+    }
+
+    for (const line of lines) {
+        if (!inCode && /^```(\w*)/.test(line)) {
+            flushText();
+            codeLang = line.match(/^```(\w*)/)[1];
+            inCode = true;
+        } else if (inCode && /^```\s*$/.test(line)) {
+            flushCode();
+            inCode = false;
+        } else if (inCode) {
+            codeLines.push(line);
+        } else {
+            textBuf += line + '\n';
         }
     }
+
+    // Flush remaining content
+    if (inCode) flushCode();
+    flushText();
 }
 
 function applyCode(code, lang) {

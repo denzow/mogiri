@@ -149,6 +149,32 @@ def delete_job(job_id):
     return jsonify({"message": f"Job '{job.name}' deleted"})
 
 
+@bp.route("/jobs/<job_id>/copy", methods=["POST"])
+def copy_job(job_id):
+    source = db.session.get(Job, job_id)
+    if not source:
+        return jsonify({"error": "Job not found"}), 404
+
+    data = request.get_json() or {}
+    new_name = data.get("name", f"{source.name} (Copy)").strip()
+
+    job = Job(
+        name=new_name,
+        description=source.description,
+        command_type=source.command_type,
+        command=source.command,
+        schedule_type=source.schedule_type,
+        schedule_value=source.schedule_value,
+        env_vars=source.env_vars,
+        working_dir=source.working_dir,
+        is_enabled=source.is_enabled,
+    )
+    db.session.add(job)
+    db.session.commit()
+    register_job(job)
+    return jsonify(_job_to_dict(job)), 201
+
+
 @bp.route("/jobs/<job_id>/run", methods=["POST"])
 def run_job(job_id):
     job = db.session.get(Job, job_id)

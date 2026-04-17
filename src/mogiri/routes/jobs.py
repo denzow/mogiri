@@ -189,6 +189,16 @@ def job_executions(job_id):
     return render_template("partials/execution_list.html", executions=executions)
 
 
+@bp.route("/<job_id>/copy")
+def job_copy(job_id):
+    source = db.session.get(Job, job_id)
+    if not source:
+        abort(404)
+    return render_template(
+        "jobs/form.html", job=None, copy_source=source, **_schedule_ctx(source)
+    )
+
+
 @bp.route("/<job_id>/edit")
 def job_edit(job_id):
     job = db.session.get(Job, job_id)
