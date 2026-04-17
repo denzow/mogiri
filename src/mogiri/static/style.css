@@ -101,6 +101,11 @@ code {
 
 .nav-brand:hover { color: #fff; }
 
+.nav-brand-logo {
+    height: 28px;
+    width: auto;
+}
+
 .nav-brand-icon {
     display: inline-flex;
     align-items: center;
