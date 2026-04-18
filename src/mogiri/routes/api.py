@@ -314,6 +314,7 @@ def _execution_to_dict(ex, include_output=False):
         "job_id": ex.job_id,
         "job_name": ex.job.name if ex.job else None,
         "workflow_id": ex.workflow_id,
+        "pid": ex.pid,
         "status": ex.status,
         "exit_code": ex.exit_code,
         "started_at": ex.started_at.isoformat() if ex.started_at else None,

@@ -46,6 +46,8 @@
                 <span class="badge badge-cancelled">Cancelled</span>
                 {% endif %}
             </dd>
+            <dt>PID</dt>
+            <dd class="mono">{{ execution.pid if execution.pid is not none else '-' }}</dd>
             <dt>Exit Code</dt>
             <dd class="mono">{{ execution.exit_code if execution.exit_code is not none else '-' }}</dd>
             <dt>Started</dt>

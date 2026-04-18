@@ -23,9 +23,23 @@ _running_processes = {}
 _running_lock = threading.Lock()
 
 
+def _cleanup_stale_executions(app):
+    """Mark orphaned 'running' executions as failed on startup."""
+    with app.app_context():
+        stale = Execution.query.filter_by(status="running").all()
+        if stale:
+            for ex in stale:
+                ex.status = "failed"
+                ex.stderr = (ex.stderr or "") + "\n[mogiri] Marked as failed: process lost on server restart"
+                ex.finished_at = datetime.now()
+            db.session.commit()
+            print(f"[mogiri] Cleaned up {len(stale)} stale running execution(s)")
+
+
 def init_scheduler(app):
     global _app
     _app = app
+    _cleanup_stale_executions(app)
     sync_all(app)
 
     scheduler.add_job(
@@ -334,6 +348,8 @@ def execute_job(
                 cwd=cwd,
                 start_new_session=True,
             )
+            execution.pid = proc.pid
+            db.session.commit()
             with _running_lock:
                 _running_processes[execution.id] = proc
 

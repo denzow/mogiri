@@ -44,6 +44,7 @@ class Execution(db.Model):
     started_at = db.Column(db.DateTime, default=now)
     finished_at = db.Column(db.DateTime, nullable=True)
     exit_code = db.Column(db.Integer, nullable=True)
+    pid = db.Column(db.Integer, nullable=True)
     status = db.Column(db.String, default="running")  # running, success, failed, timeout
     stdout = db.Column(db.Text, default="")
     stderr = db.Column(db.Text, default="")
