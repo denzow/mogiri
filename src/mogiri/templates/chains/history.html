@@ -2,9 +2,9 @@
 {% block title %}{% if workflow %}{{ workflow.name }} History{% else %}Chain History{% endif %} - mogiri{% endblock %}
 {% block content %}
 {% if workflow %}
-<a href="{{ url_for('chains.workflow_editor', workflow_id=workflow.id) }}" class="back-link">&larr; Back to {{ workflow.name }}</a>
+<a href="{{ url_for('workflows.workflow_editor', workflow_id=workflow.id) }}" class="back-link">&larr; Back to {{ workflow.name }}</a>
 {% else %}
-<a href="{{ url_for('chains.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
+<a href="{{ url_for('workflows.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
 {% endif %}
 
 <div class="page-header">

@@ -176,7 +176,7 @@ def test_workflow_save_api(client, app):
         _db.session.commit()
         wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
 
-    response = client.post(f"/chains/{wf_id}/save", json={
+    response = client.post(f"/workflows/{wf_id}/save", json={
         "connections": [
             {"source_job_id": a_id, "target_job_id": b_id,
              "source_node_key": f"{a_id}:0", "target_node_key": f"{b_id}:0",
@@ -215,7 +215,7 @@ def test_workflow_save_allows_cycle(client, app):
         _db.session.commit()
         wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
 
-    response = client.post(f"/chains/{wf_id}/save", json={
+    response = client.post(f"/workflows/{wf_id}/save", json={
         "connections": [
             {"source_job_id": a_id, "target_job_id": b_id,
              "source_node_key": f"{a_id}:0", "target_node_key": f"{b_id}:0"},
@@ -244,7 +244,7 @@ def test_workflow_save_allows_same_job_different_nodes(client, app):
         _db.session.commit()
         wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
 
-    response = client.post(f"/chains/{wf_id}/save", json={
+    response = client.post(f"/workflows/{wf_id}/save", json={
         "connections": [
             {"source_job_id": a_id, "target_job_id": b_id,
              "source_node_key": f"{a_id}:0", "target_node_key": f"{b_id}:0"},
@@ -312,7 +312,7 @@ def test_workflow_save_max_iterations(client, app):
         _db.session.commit()
         wf_id = wf.id
 
-    response = client.post(f"/chains/{wf_id}/save", json={
+    response = client.post(f"/workflows/{wf_id}/save", json={
         "connections": [],
         "node_positions": [],
         "entry_job_ids": [],

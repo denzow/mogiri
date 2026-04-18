@@ -3,7 +3,7 @@
 {% block content %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jerosoler/Drawflow@0.0.59/dist/drawflow.min.css">
 
-<a href="{{ url_for('chains.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
+<a href="{{ url_for('workflows.workflow_list') }}" class="back-link">&larr; Back to Workflows</a>
 
 <div class="page-header">
     <input type="text" id="wf-name" value="{{ workflow.name }}"
@@ -13,10 +13,10 @@
            oninput="markDirty()">
     <div class="actions">
         <button id="run-btn"
-                hx-post="{{ url_for('chains.workflow_run', workflow_id=workflow.id) }}"
+                hx-post="{{ url_for('workflows.workflow_run', workflow_id=workflow.id) }}"
                 hx-swap="none"
                 class="btn btn-primary btn-sm">Run</button>
-        <a href="{{ url_for('chains.chain_history', workflow_id=workflow.id) }}" class="btn btn-sm">History</a>
+        <a href="{{ url_for('workflows.chain_history', workflow_id=workflow.id) }}" class="btn btn-sm">History</a>
         <button id="save-btn" class="btn btn-sm" style="border-color: var(--color-primary); color: var(--color-primary);">Save</button>
     </div>
 </div>
@@ -358,7 +358,7 @@ document.getElementById('save-btn').addEventListener('click', () => {
     const scheduleType = document.querySelector('input[name="wf_schedule_type"]:checked').value;
     const scheduleValue = document.getElementById('wf_schedule_value').value;
 
-    fetch('{{ url_for("chains.workflow_save", workflow_id=workflow.id) }}', {
+    fetch('{{ url_for("workflows.workflow_save", workflow_id=workflow.id) }}', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({

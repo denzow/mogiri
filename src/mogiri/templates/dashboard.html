@@ -12,11 +12,15 @@
     </div>
     <div class="stat-card">
         <div class="stat-value">{{ enabled_jobs }}</div>
-        <div class="stat-label">Enabled</div>
+        <div class="stat-label">Jobs Enabled</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">{{ total_jobs - enabled_jobs }}</div>
-        <div class="stat-label">Disabled</div>
+        <div class="stat-value">{{ total_workflows }}</div>
+        <div class="stat-label">Total Workflows</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ enabled_workflows }}</div>
+        <div class="stat-label">Workflows Enabled</div>
     </div>
 </div>
 
@@ -51,7 +55,7 @@
                     <span class="badge badge-cancelled">Cancelled</span>
                     {% endif %}
                     {% if exec.workflow_id %}
-                    <a href="{{ url_for('chains.workflow_editor', workflow_id=exec.workflow_id) }}"
+                    <a href="{{ url_for('workflows.workflow_editor', workflow_id=exec.workflow_id) }}"
                        class="badge badge-chain" style="margin-left: 0.3rem; text-decoration: none;">{{ exec.workflow.name }}</a>
                     {% endif %}
                 </td>

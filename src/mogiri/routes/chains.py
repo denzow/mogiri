@@ -18,7 +18,7 @@ from mogiri.models import (
     db,
 )
 
-bp = Blueprint("chains", __name__, url_prefix="/chains")
+bp = Blueprint("workflows", __name__, url_prefix="/workflows")
 
 
 def _wf_schedule_ctx(wf):
@@ -60,7 +60,7 @@ def workflow_new():
         db.session.add(wf)
         db.session.commit()
         register_workflow(wf)
-        return redirect(url_for("chains.workflow_editor", workflow_id=wf.id))
+        return redirect(url_for("workflows.workflow_editor", workflow_id=wf.id))
     return render_template("chains/new.html", **_wf_schedule_ctx(None))
 
 
@@ -72,7 +72,7 @@ def workflow_delete(workflow_id):
     db.session.delete(wf)
     db.session.commit()
     flash(f"Workflow '{wf.name}' deleted.", "success")
-    return "", 200, {"HX-Redirect": url_for("chains.workflow_list")}
+    return "", 200, {"HX-Redirect": url_for("workflows.workflow_list")}
 
 
 @bp.route("/<workflow_id>/toggle", methods=["PATCH"])
@@ -90,7 +90,7 @@ def workflow_toggle(workflow_id):
         badge = '<span class="badge badge-enabled">Enabled</span>'
     else:
         badge = '<span class="badge badge-disabled">Disabled</span>'
-    return f"""<span hx-patch="{url_for('chains.workflow_toggle', workflow_id=wf.id)}"
+    return f"""<span hx-patch="{url_for('workflows.workflow_toggle', workflow_id=wf.id)}"
                      hx-swap="outerHTML"
                      class="toggle-btn">{badge}</span>"""
 
@@ -110,7 +110,7 @@ def workflow_run(workflow_id):
     thread = threading.Thread(target=execute_workflow, args=(wf.id,), kwargs={"force": True})
     thread.start()
 
-    history_url = url_for("chains.chain_history", workflow_id=wf.id)
+    history_url = url_for("workflows.chain_history", workflow_id=wf.id)
     flash(
         f"Workflow '{wf.name}' triggered. "
         f'<a href="{history_url}">View execution history</a>',

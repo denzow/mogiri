@@ -26,7 +26,7 @@
                     <span class="badge badge-cancelled">Cancelled</span>
                     {% endif %}
                     {% if exec.workflow_id %}
-                    <a href="{{ url_for('chains.workflow_editor', workflow_id=exec.workflow_id) }}"
+                    <a href="{{ url_for('workflows.workflow_editor', workflow_id=exec.workflow_id) }}"
                        class="badge badge-chain" style="margin-left: 0.3rem; text-decoration: none;">{{ exec.workflow.name }}</a>
                     {% endif %}
                 </td>

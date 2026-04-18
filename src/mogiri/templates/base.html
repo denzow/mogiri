@@ -23,8 +23,8 @@
                    class="nav-link {% if request.endpoint == 'dashboard.index' %}active{% endif %}">Dashboard</a>
                 <a href="{{ url_for('jobs.job_list') }}"
                    class="nav-link {% if request.endpoint and request.endpoint.startswith('jobs.') %}active{% endif %}">Jobs</a>
-                <a href="{{ url_for('chains.workflow_list') }}"
-                   class="nav-link {% if request.endpoint and request.endpoint.startswith('chains.') %}active{% endif %}">Workflows</a>
+                <a href="{{ url_for('workflows.workflow_list') }}"
+                   class="nav-link {% if request.endpoint and request.endpoint.startswith('workflows.') %}active{% endif %}">Workflows</a>
                 <a href="{{ url_for('settings.index') }}"
                    class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}active{% endif %}">Settings</a>
             </div>
