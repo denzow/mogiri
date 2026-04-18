@@ -85,6 +85,7 @@ def _add_scheduler_job(job):
     try:
         trigger = _make_trigger(job.schedule_type, job.schedule_value)
         if trigger is None:
+            unregister_job(job.id)
             return
         scheduler.add_job(
             execute_job,
@@ -159,6 +160,22 @@ def _kill_process(proc):
         proc.kill()
     except (OSError, ProcessLookupError):
         pass
+
+
+def cancel_workflow(workflow_id: str) -> int:
+    """Cancel all running executions for a workflow. Returns count of cancelled."""
+    app = _app
+    if app is None:
+        return 0
+    with app.app_context():
+        running = Execution.query.filter_by(
+            workflow_id=workflow_id, status="running"
+        ).all()
+        count = 0
+        for ex in running:
+            if cancel_execution(ex.id):
+                count += 1
+        return count
 
 
 def cancel_execution(execution_id: str) -> bool:
