@@ -16,6 +16,10 @@
                 hx-post="{{ url_for('workflows.workflow_run', workflow_id=workflow.id) }}"
                 hx-swap="none"
                 class="btn btn-primary btn-sm">Run</button>
+        <button hx-post="{{ url_for('workflows.workflow_cancel', workflow_id=workflow.id) }}"
+                hx-swap="none"
+                hx-confirm="Cancel all running executions?"
+                class="btn btn-sm" style="color: var(--color-error); border-color: var(--color-error);">Cancel</button>
         <a href="{{ url_for('workflows.chain_history', workflow_id=workflow.id) }}" class="btn btn-sm">History</a>
         <button id="save-btn" class="btn btn-sm" style="border-color: var(--color-primary); color: var(--color-primary);">Save</button>
     </div>
@@ -42,7 +46,7 @@
             <span class="condition-legend-item"><span class="condition-legend-dot dot-failure"></span> F = failure</span>
             <span class="condition-legend-item"><span class="condition-legend-dot dot-any"></span> A = any</span>
         </span>
-        &mdash; Select + <kbd>Delete</kbd> to remove.
+        &mdash; Click edge to cycle condition, <kbd>Delete</kbd> to remove.
     </p>
     <div style="display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;">
         <label for="max-iterations" style="font-size: 0.8rem; color: var(--color-text-muted);">Max loop:</label>
@@ -276,6 +280,36 @@ function markDirty() {
     isDirty = true;
     updateRunButton();
 }
+
+// --- Edge condition cycle on click ---
+const OUTPUT_CYCLE = ['output_1', 'output_2', 'output_3'];
+
+container.addEventListener('click', function(e) {
+    const path = e.target.closest('.main-path');
+    if (!path) return;
+    const svg = path.closest('.connection');
+    if (!svg) return;
+
+    let srcId = null, tgtId = null, currentOutput = null, currentInput = null;
+    svg.classList.forEach(cls => {
+        const out = cls.match(/^node_out_node-(\d+)$/);
+        const inp = cls.match(/^node_in_node-(\d+)$/);
+        if (out) srcId = parseInt(out[1]);
+        if (inp) tgtId = parseInt(inp[1]);
+        if (cls.startsWith('output_')) currentOutput = cls;
+        if (cls.startsWith('input_')) currentInput = cls;
+    });
+    if (!srcId || !tgtId || !currentOutput) return;
+    if (srcId === START_NODE_ID) return;
+
+    // Delay to let Drawflow's click handler finish first
+    setTimeout(() => {
+        const nextOutput = OUTPUT_CYCLE[(OUTPUT_CYCLE.indexOf(currentOutput) + 1) % 3];
+        editor.removeSingleConnection(srcId, tgtId, currentOutput, currentInput);
+        editor.addConnection(srcId, tgtId, nextOutput, currentInput);
+        markDirty();
+    }, 50);
+});
 
 // --- Edge hover highlight ---
 editor.on('connectionCreated', function() { markDirty(); });
