@@ -238,16 +238,18 @@ def execute_job(
     _node_key: str = None,
     triggered_by_execution_id: str = None,
     triggered_by_chain_id: str = None,
-    _chain_visited: set = None,
+    _chain_visit_counts: dict = None,
+    _parent_output: str = None,
 ) -> None:
     """Execute a job's command and record the result."""
     app = _app
     if app is None:
         return
 
-    # Track visited by node_key when available, else by job_id
+    # Track visit counts by node_key (allows loops up to max_iterations)
     visit_key = _node_key or job_id
-    chain_visited = _chain_visited or {visit_key}
+    chain_visit_counts = dict(_chain_visit_counts) if _chain_visit_counts else {}
+    chain_visit_counts[visit_key] = chain_visit_counts.get(visit_key, 0) + 1
 
     with app.app_context():
         job = db.session.get(Job, job_id)
@@ -292,6 +294,15 @@ def execute_job(
                 env["MOGIRI_PARENT_STDOUT"] = (parent_exec.stdout or "")[-4000:]
                 env["MOGIRI_PARENT_STDERR"] = (parent_exec.stderr or "")[-4000:]
                 env["MOGIRI_PARENT_JOB_NAME"] = parent_job.name if parent_job else ""
+        if _parent_output:
+            env["MOGIRI_PARENT_OUTPUT"] = _parent_output
+
+        # Create output file for job-to-job data passing
+        output_file = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".output", delete=False
+        )
+        output_file.close()
+        env["MOGIRI_OUTPUT"] = output_file.name
 
         tmp_script = None
         proc = None
@@ -360,17 +371,37 @@ def execute_job(
                     os.unlink(tmp_script.name)
                 except OSError:
                     pass
+
+            # Read output file content for passing to child jobs
+            job_output = ""
+            try:
+                with open(output_file.name, "r") as f:
+                    job_output = f.read()
+            except OSError:
+                pass
+            try:
+                os.unlink(output_file.name)
+            except OSError:
+                pass
+
             execution.finished_at = datetime.now()
             db.session.commit()
 
             # Only trigger chains when running as part of a workflow
             # Don't trigger chains if cancelled
             if _workflow_id and execution.status != "cancelled":
-                _trigger_chains(execution, _workflow_id, _node_key, chain_visited)
+                _trigger_chains(
+                    execution, _workflow_id, _node_key, chain_visit_counts,
+                    job_output,
+                )
 
 
-def _trigger_chains(execution, workflow_id, source_node_key, chain_visited):
+def _trigger_chains(execution, workflow_id, source_node_key, chain_visit_counts,
+                    parent_output=""):
     """After a job finishes within a workflow, trigger chained jobs."""
+    wf = db.session.get(Workflow, workflow_id)
+    max_iterations = wf.max_iterations if wf else 10
+
     # Prefer matching by source_node_key; fall back to source_job_id
     if source_node_key:
         edges = WorkflowEdge.query.filter_by(
@@ -391,17 +422,16 @@ def _trigger_chains(execution, workflow_id, source_node_key, chain_visited):
         ):
             continue
 
-        # Track visited by node_key when available, else by job_id
+        # Check visit count against max_iterations
         visit_key = edge.target_node_key or edge.target_job_id
-        if visit_key in chain_visited:
-            print(f"[mogiri] Chain cycle detected: skipping {visit_key}")
+        if chain_visit_counts.get(visit_key, 0) >= max_iterations:
+            print(f"[mogiri] Loop limit reached ({max_iterations}): skipping {visit_key}")
             continue
 
         target_job = db.session.get(Job, edge.target_job_id)
         if not target_job:
             continue
 
-        new_visited = chain_visited | {visit_key}
         thread = threading.Thread(
             target=execute_job,
             args=(edge.target_job_id,),
@@ -410,7 +440,8 @@ def _trigger_chains(execution, workflow_id, source_node_key, chain_visited):
                 "_node_key": edge.target_node_key,
                 "triggered_by_execution_id": execution.id,
                 "triggered_by_chain_id": edge.id,
-                "_chain_visited": new_visited,
+                "_chain_visit_counts": chain_visit_counts,
+                "_parent_output": parent_output,
             },
         )
         thread.start()

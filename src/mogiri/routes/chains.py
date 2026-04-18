@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 from flask import (
     Blueprint,
     abort,
@@ -38,39 +36,6 @@ def _wf_schedule_ctx(wf):
         "show_none": True,
         "preview_url": _url_for("jobs.cron_preview"),
     }
-
-
-def _has_cycle(connections):
-    """DFS-based cycle detection on the proposed chain graph (node_key based)."""
-    graph = defaultdict(list)
-    nodes = set()
-    for conn in connections:
-        src = conn.get("source_node_key") or conn["source_job_id"]
-        tgt = conn.get("target_node_key") or conn["target_job_id"]
-        graph[src].append(tgt)
-        nodes.add(src)
-        nodes.add(tgt)
-
-    visited = set()
-    rec_stack = set()
-
-    def dfs(node):
-        visited.add(node)
-        rec_stack.add(node)
-        for neighbor in graph.get(node, []):
-            if neighbor not in visited:
-                if dfs(neighbor):
-                    return True
-            elif neighbor in rec_stack:
-                return True
-        rec_stack.discard(node)
-        return False
-
-    for node in nodes:
-        if node not in visited:
-            if dfs(node):
-                return True
-    return False
 
 
 # ---------- Workflow list ----------
@@ -236,6 +201,7 @@ def workflow_save(workflow_id):
     description = data.get("description")
     schedule_type = data.get("schedule_type")
     schedule_value = data.get("schedule_value")
+    max_iterations = data.get("max_iterations")
 
     if name is not None:
         wf.name = name
@@ -245,15 +211,14 @@ def workflow_save(workflow_id):
         wf.schedule_type = schedule_type
     if schedule_value is not None:
         wf.schedule_value = schedule_value
+    if max_iterations is not None:
+        wf.max_iterations = max(1, int(max_iterations))
 
     wf.entry_job_ids = _json.dumps(entry_job_ids)
     wf.entry_node_keys = _json.dumps(entry_node_keys_data)
     if start_pos:
         wf.start_node_x = start_pos.get("x", 50)
         wf.start_node_y = start_pos.get("y", 250)
-
-    if _has_cycle(connections):
-        return jsonify({"error": "Cycle detected in chain configuration"}), 400
 
     # Replace edges — deduplicate by (source_node_key, target_node_key, condition)
     WorkflowEdge.query.filter_by(workflow_id=wf.id).delete()

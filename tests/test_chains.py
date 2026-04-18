@@ -2,56 +2,7 @@ import json
 import time
 
 from mogiri.models import Execution, Job, Workflow, WorkflowEdge, db as _db
-from mogiri.routes.chains import _has_cycle
 from mogiri.scheduler import execute_job, execute_workflow
-
-
-def test_has_cycle_no_cycle():
-    connections = [
-        {"source_job_id": "a", "target_job_id": "b",
-         "source_node_key": "a:0", "target_node_key": "b:0"},
-        {"source_job_id": "b", "target_job_id": "c",
-         "source_node_key": "b:0", "target_node_key": "c:0"},
-    ]
-    assert _has_cycle(connections) is False
-
-
-def test_has_cycle_with_cycle():
-    connections = [
-        {"source_job_id": "a", "target_job_id": "b",
-         "source_node_key": "a:0", "target_node_key": "b:0"},
-        {"source_job_id": "b", "target_job_id": "a",
-         "source_node_key": "b:0", "target_node_key": "a:0"},
-    ]
-    assert _has_cycle(connections) is True
-
-
-def test_has_cycle_self_loop():
-    connections = [
-        {"source_job_id": "a", "target_job_id": "a",
-         "source_node_key": "a:0", "target_node_key": "a:0"},
-    ]
-    assert _has_cycle(connections) is True
-
-
-def test_has_cycle_same_job_different_nodes():
-    """Same job used twice with different node_keys is NOT a cycle."""
-    connections = [
-        {"source_job_id": "a", "target_job_id": "b",
-         "source_node_key": "a:0", "target_node_key": "b:0"},
-        {"source_job_id": "b", "target_job_id": "a",
-         "source_node_key": "b:0", "target_node_key": "a:1"},
-    ]
-    assert _has_cycle(connections) is False
-
-
-def test_has_cycle_legacy_no_node_keys():
-    """Fallback to job_id when node_keys are absent (legacy data)."""
-    connections = [
-        {"source_job_id": "a", "target_job_id": "b"},
-        {"source_job_id": "b", "target_job_id": "c"},
-    ]
-    assert _has_cycle(connections) is False
 
 
 def _create_workflow_with_edge(db_session, job_a, job_b, condition="success"):
@@ -253,7 +204,8 @@ def test_workflow_save_api(client, app):
         assert wf.schedule_value == "0 * * * *"
 
 
-def test_workflow_save_rejects_cycle(client, app):
+def test_workflow_save_allows_cycle(client, app):
+    """Cycles are allowed — loop limit is enforced at runtime via max_iterations."""
     with app.app_context():
         wf = Workflow(name="Test WF")
         _db.session.add(wf)
@@ -270,11 +222,15 @@ def test_workflow_save_rejects_cycle(client, app):
             {"source_job_id": b_id, "target_job_id": a_id,
              "source_node_key": f"{b_id}:0", "target_node_key": f"{a_id}:0"},
         ],
-        "node_positions": [],
-        "entry_job_ids": [],
+        "node_positions": [
+            {"job_id": a_id, "node_key": f"{a_id}:0", "x": 100, "y": 100},
+            {"job_id": b_id, "node_key": f"{b_id}:0", "x": 300, "y": 100},
+        ],
+        "entry_job_ids": [a_id],
+        "entry_node_keys": [{"node_key": f"{a_id}:0", "job_id": a_id}],
     })
-    assert response.status_code == 400
-    assert "Cycle" in response.get_json()["error"]
+    assert response.status_code == 200
+    assert response.get_json()["ok"] is True
 
 
 def test_workflow_save_allows_same_job_different_nodes(client, app):
@@ -309,3 +265,62 @@ def test_workflow_save_allows_same_job_different_nodes(client, app):
     with app.app_context():
         edges = WorkflowEdge.query.filter_by(workflow_id=wf_id).all()
         assert len(edges) == 2
+
+
+def test_loop_respects_max_iterations(app):
+    """A self-loop stops after max_iterations."""
+    with app.app_context():
+        job_a = Job(name="Loop Job", command="echo loop", schedule_type="none")
+        _db.session.add(job_a)
+        _db.session.commit()
+        nk_a = f"{job_a.id}:0"
+        wf = Workflow(
+            name="Loop WF",
+            max_iterations=3,
+            entry_job_ids=json.dumps([job_a.id]),
+            entry_node_keys=json.dumps([{"node_key": nk_a, "job_id": job_a.id}]),
+        )
+        _db.session.add(wf)
+        _db.session.commit()
+        # Self-loop: A -> A on success
+        edge = WorkflowEdge(
+            workflow_id=wf.id,
+            source_job_id=job_a.id,
+            target_job_id=job_a.id,
+            source_node_key=nk_a,
+            target_node_key=nk_a,
+            trigger_condition="success",
+        )
+        _db.session.add(edge)
+        _db.session.commit()
+        wf_id = wf.id
+        job_a_id = job_a.id
+
+    execute_workflow(wf_id)
+    time.sleep(3)
+
+    with app.app_context():
+        execs = Execution.query.filter_by(job_id=job_a_id).all()
+        assert len(execs) == 3  # Exactly max_iterations times
+
+
+def test_workflow_save_max_iterations(client, app):
+    """max_iterations is saved via the save endpoint."""
+    with app.app_context():
+        wf = Workflow(name="Test WF")
+        _db.session.add(wf)
+        _db.session.commit()
+        wf_id = wf.id
+
+    response = client.post(f"/chains/{wf_id}/save", json={
+        "connections": [],
+        "node_positions": [],
+        "entry_job_ids": [],
+        "entry_node_keys": [],
+        "max_iterations": 5,
+    })
+    assert response.status_code == 200
+
+    with app.app_context():
+        wf = _db.session.get(Workflow, wf_id)
+        assert wf.max_iterations == 5

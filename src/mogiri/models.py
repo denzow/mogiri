@@ -75,6 +75,7 @@ class Workflow(db.Model):
     schedule_value = db.Column(db.String, default="")
     entry_job_ids = db.Column(db.Text, default="[]")  # JSON list of job IDs
     entry_node_keys = db.Column(db.Text, default="[]")  # JSON list of {"node_key", "job_id"}
+    max_iterations = db.Column(db.Integer, default=10)  # Max times a node can be visited (loop limit)
     start_node_x = db.Column(db.Float, default=50)
     start_node_y = db.Column(db.Float, default=250)
     created_at = db.Column(db.DateTime, default=now)

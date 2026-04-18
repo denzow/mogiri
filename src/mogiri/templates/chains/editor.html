@@ -34,13 +34,23 @@
     </div>
 </div>
 
-<p style="font-size: 0.8rem; color: var(--color-text-muted); margin-bottom: 1rem;">
-    Connect the <strong>Start</strong> node to entry jobs. Click a label to toggle:
-    <span class="badge badge-chain-success">success</span>
-    <span class="badge badge-chain-failure">failure</span>
-    <span class="badge badge-chain-any">any</span>
-    &mdash; Select + <kbd>Delete</kbd> to remove.
-</p>
+<div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+    <p style="font-size: 0.8rem; color: var(--color-text-muted); margin: 0; flex: 1;">
+        Connect the <strong>Start</strong> node to entry jobs. Use output ports:
+        <span class="condition-legend">
+            <span class="condition-legend-item"><span class="condition-legend-dot dot-success"></span> S = success</span>
+            <span class="condition-legend-item"><span class="condition-legend-dot dot-failure"></span> F = failure</span>
+            <span class="condition-legend-item"><span class="condition-legend-dot dot-any"></span> A = any</span>
+        </span>
+        &mdash; Select + <kbd>Delete</kbd> to remove.
+    </p>
+    <div style="display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;">
+        <label for="max-iterations" style="font-size: 0.8rem; color: var(--color-text-muted);">Max loop:</label>
+        <input type="number" id="max-iterations" value="{{ workflow.max_iterations or 10 }}" min="1" max="1000"
+               style="width: 5rem; font-size: 0.8rem; padding: 0.2rem 0.4rem;"
+               oninput="markDirty()">
+    </div>
+</div>
 
 {% if not jobs_data %}
 <div class="empty-state">
@@ -73,7 +83,6 @@
     </div>
     <div class="card editor-canvas-card">
         <div id="drawflow" style="width: 100%; height: 600px;"></div>
-        <div id="condition-labels" style="position: absolute; top: 0; left: 0; pointer-events: none; width: 100%; height: 100%;"></div>
     </div>
 </div>
 
@@ -102,8 +111,10 @@ const nodeKeyToDrawflow = {};
 const drawflowToNodeKey = {};
 const drawflowToJobId = {};
 const instanceCounters = {};
-const connectionConditions = new Map();
-const CONDITIONS = ['success', 'failure', 'any'];
+
+// Output port ↔ condition mapping
+const OUTPUT_TO_CONDITION = {output_1: 'success', output_2: 'failure', output_3: 'any'};
+const CONDITION_TO_OUTPUT = {success: 'output_1', failure: 'output_2', any: 'output_3'};
 
 let START_NODE_ID = null;
 
@@ -165,7 +176,7 @@ function addJobNode(jobId, x, y, nodeKey) {
         <div class="badge ${badgeClass}" style="font-size:0.6rem;">${job.command_type}</div>
     </div>`;
     const nodeId = editor.addNode(
-        nk, 1, 1, posX, posY, 'chain-node-wrap', {job_id: jobId, node_key: nk}, html
+        nk, 1, 3, posX, posY, 'chain-node-wrap', {job_id: jobId, node_key: nk}, html
     );
     nodeKeyToDrawflow[nk] = nodeId;
     drawflowToNodeKey[nodeId] = nk;
@@ -181,7 +192,6 @@ function addJobNode(jobId, x, y, nodeKey) {
 editor.on('nodeRemoved', function(nodeId) {
     markDirty();
     if (nodeId === START_NODE_ID) {
-        // Re-add Start node if deleted
         setTimeout(() => addStartNode(50, 250), 100);
         return;
     }
@@ -190,9 +200,6 @@ editor.on('nodeRemoved', function(nodeId) {
         delete nodeKeyToDrawflow[nk];
         delete drawflowToNodeKey[nodeId];
         delete drawflowToJobId[nodeId];
-        for (const key of [...connectionConditions.keys()])
-            if (key.includes(nk)) connectionConditions.delete(key);
-        setTimeout(updateConditionLabels, 50);
     }
 });
 
@@ -217,11 +224,8 @@ existingEdges.forEach(edge => {
         tgtDrawId = tgtNodes.length ? tgtNodes[0] : null;
     }
     if (srcDrawId != null && tgtDrawId != null) {
-        editor.addConnection(srcDrawId, tgtDrawId, 'output_1', 'input_1');
-        connectionConditions.set(
-            `${drawflowToNodeKey[srcDrawId]}->${drawflowToNodeKey[tgtDrawId]}`,
-            edge.trigger_condition
-        );
+        const outputPort = CONDITION_TO_OUTPUT[edge.trigger_condition] || 'output_1';
+        editor.addConnection(srcDrawId, tgtDrawId, outputPort, 'input_1');
     }
 });
 
@@ -273,76 +277,31 @@ function markDirty() {
     updateRunButton();
 }
 
-// --- Condition labels (only for job-to-job connections, not Start) ---
-function getConnectionInfo(connEl) {
-    let srcId = null, tgtId = null;
-    connEl.classList.forEach(cls => {
-        const out = cls.match(/^node_out_node-(\d+)$/);
-        const inp = cls.match(/^node_in_node-(\d+)$/);
-        if (out) srcId = parseInt(out[1]);
-        if (inp) tgtId = parseInt(inp[1]);
-    });
-    if (!srcId || !tgtId) return null;
-    const isStartConn = (srcId === START_NODE_ID);
-    const srcKey = drawflowToNodeKey[srcId];
-    const tgtKey = drawflowToNodeKey[tgtId];
-    return {srcId, tgtId, srcKey, tgtKey, isStartConn};
-}
+// --- Edge hover highlight ---
+editor.on('connectionCreated', function() { markDirty(); });
+editor.on('connectionRemoved', function() { markDirty(); });
+editor.on('nodeMoved', function() { markDirty(); });
 
-function updateConditionLabels() {
-    const labelsEl = document.getElementById('condition-labels');
-    labelsEl.innerHTML = '';
-    container.querySelectorAll('.connection .main-path').forEach(path => {
-        const connEl = path.closest('.connection');
-        if (!connEl) return;
-        const info = getConnectionInfo(connEl);
-        if (!info || info.isStartConn) return;  // Skip Start connections
-        if (!info.srcKey || !info.tgtKey) return;
-        const condKey = `${info.srcKey}->${info.tgtKey}`;
-        const condition = connectionConditions.get(condKey) || 'success';
-        try {
-            const mid = path.getPointAtLength(path.getTotalLength() / 2);
-            const tag = document.createElement('div');
-            tag.className = 'chain-condition-tag';
-            tag.setAttribute('data-condition', condition);
-            tag.textContent = condition;
-            tag.style.position = 'absolute';
-            tag.style.left = mid.x + 'px';
-            tag.style.top = mid.y + 'px';
-            tag.style.pointerEvents = 'auto';
-            tag.style.cursor = 'pointer';
-            tag.addEventListener('click', () => {
-                const cur = connectionConditions.get(condKey) || 'success';
-                connectionConditions.set(condKey, CONDITIONS[(CONDITIONS.indexOf(cur) + 1) % 3]);
-                markDirty();
-                updateConditionLabels();
-            });
-            labelsEl.appendChild(tag);
-        } catch(e) {}
+container.addEventListener('mouseover', function(e) {
+    const connEl = e.target.closest('.connection');
+    if (!connEl) return;
+    container.querySelectorAll('.connection').forEach(c => {
+        if (c === connEl) {
+            c.classList.add('edge-highlight');
+            c.classList.remove('edge-dim');
+        } else {
+            c.classList.add('edge-dim');
+            c.classList.remove('edge-highlight');
+        }
     });
-}
-
-editor.on('connectionCreated', function(info) {
-    markDirty();
-    if (info.output_id === START_NODE_ID) return;  // Start connections have no condition
-    const srcKey = drawflowToNodeKey[info.output_id];
-    const tgtKey = drawflowToNodeKey[info.input_id];
-    if (srcKey && tgtKey) {
-        const ck = `${srcKey}->${tgtKey}`;
-        if (!connectionConditions.has(ck)) connectionConditions.set(ck, 'success');
-    }
-    setTimeout(updateConditionLabels, 50);
 });
-editor.on('connectionRemoved', function(info) {
-    markDirty();
-    if (info.output_id === START_NODE_ID) return;
-    const srcKey = drawflowToNodeKey[info.output_id];
-    const tgtKey = drawflowToNodeKey[info.input_id];
-    if (srcKey && tgtKey) connectionConditions.delete(`${srcKey}->${tgtKey}`);
-    setTimeout(updateConditionLabels, 50);
+container.addEventListener('mouseout', function(e) {
+    if (!e.target.closest('.connection')) return;
+    if (e.relatedTarget && e.relatedTarget.closest('.connection')) return;
+    container.querySelectorAll('.connection').forEach(c => {
+        c.classList.remove('edge-highlight', 'edge-dim');
+    });
 });
-editor.on('nodeMoved', () => { markDirty(); setTimeout(updateConditionLabels, 50); });
-setTimeout(updateConditionLabels, 200);
 
 // End of state restore — future events are real user edits
 restoringState = false;
@@ -378,19 +337,17 @@ document.getElementById('save-btn').addEventListener('click', () => {
         const nodeKey = node.data.node_key;
         nodePositions.push({job_id: jobId, node_key: nodeKey, x: node.pos_x, y: node.pos_y});
 
-        for (const outConns of Object.values(node.outputs)) {
+        for (const [outputClass, outConns] of Object.entries(node.outputs)) {
+            const condition = OUTPUT_TO_CONDITION[outputClass] || 'success';
             for (const conn of outConns.connections) {
                 const tgt = moduleData[conn.node];
                 if (!tgt || tgt.data.is_start) continue;
-                const tgtJobId = tgt.data.job_id;
-                const tgtNodeKey = tgt.data.node_key;
-                const condKey = `${nodeKey}->${tgtNodeKey}`;
                 connections.push({
                     source_job_id: jobId,
-                    target_job_id: tgtJobId,
+                    target_job_id: tgt.data.job_id,
                     source_node_key: nodeKey,
-                    target_node_key: tgtNodeKey,
-                    trigger_condition: connectionConditions.get(condKey) || 'success',
+                    target_node_key: tgt.data.node_key,
+                    trigger_condition: condition,
                 });
             }
         }
@@ -415,6 +372,7 @@ document.getElementById('save-btn').addEventListener('click', () => {
             start_node: startNode,
             schedule_type: scheduleType,
             schedule_value: scheduleValue,
+            max_iterations: parseInt(document.getElementById('max-iterations').value) || 10,
         }),
     })
     .then(r => r.json())

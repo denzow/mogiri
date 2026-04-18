@@ -554,6 +554,46 @@ pre.log-output {
     display: none;
 }
 
+/* ===== Environment variables help ===== */
+.env-vars-help {
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.env-vars-help summary {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    user-select: none;
+}
+
+.env-vars-help-body {
+    margin-top: 0.4rem;
+    padding: 0.6rem 0.8rem;
+    background: #f8fafc;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+    line-height: 1.6;
+}
+
+.env-vars-help-body dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.2rem 0.75rem;
+}
+
+.env-vars-help-body dt {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.env-vars-help-body dd {
+    margin: 0;
+    color: var(--color-text-secondary);
+}
+
 /* ===== Forms ===== */
 .form-card {
     max-width: 680px;
@@ -876,15 +916,85 @@ pre.log-output {
     background: var(--color-primary) !important;
 }
 
+/* Output ports colored by condition */
+.chain-node-wrap .output_1 {
+    border-color: var(--color-success) !important;
+}
+.chain-node-wrap .output_2 {
+    border-color: var(--color-error) !important;
+}
+.chain-node-wrap .output_3 {
+    border-color: var(--color-info) !important;
+}
+.chain-node-wrap .output_1:hover {
+    background: var(--color-success) !important;
+}
+.chain-node-wrap .output_2:hover {
+    background: var(--color-error) !important;
+}
+.chain-node-wrap .output_3:hover {
+    background: var(--color-info) !important;
+}
+
+/* Output port labels */
+.chain-node-wrap .output {
+    position: relative;
+}
+.chain-node-wrap .output::before {
+    position: absolute;
+    right: 18px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.6rem;
+    font-weight: 700;
+    pointer-events: none;
+    white-space: nowrap;
+}
+.chain-node-wrap .output_1::before {
+    content: 'S';
+    color: var(--color-success);
+}
+.chain-node-wrap .output_2::before {
+    content: 'F';
+    color: var(--color-error);
+}
+.chain-node-wrap .output_3::before {
+    content: 'A';
+    color: var(--color-info);
+}
+
 /* Connection lines */
 .drawflow .connection .main-path {
     stroke: var(--color-primary);
     stroke-width: 2.5;
+    transition: stroke-width 0.15s ease, stroke-opacity 0.15s ease;
 }
 
 .drawflow .connection .main-path:hover {
     stroke-width: 4;
     cursor: pointer;
+}
+
+/* Connection line colors by output port (condition) */
+.drawflow .connection.output_1 .main-path {
+    stroke: var(--color-success);
+}
+.drawflow .connection.output_2 .main-path {
+    stroke: var(--color-error);
+}
+.drawflow .connection.output_3 .main-path {
+    stroke: var(--color-info);
+}
+
+/* Edge hover highlight */
+.drawflow .connection.edge-highlight .main-path {
+    stroke-width: 4.5;
+    stroke-opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(99,102,241,0.5));
+}
+
+.drawflow .connection.edge-dim .main-path {
+    stroke-opacity: 0.15;
 }
 
 /* Node card */
@@ -1058,38 +1168,32 @@ kbd {
     box-shadow: 0 1px 0 var(--color-border);
 }
 
-/* Condition label on connections */
-.chain-condition-tag {
-    position: absolute;
-    padding: 0.15rem 0.5rem;
-    font-size: 0.65rem;
-    font-weight: 700;
-    border-radius: 9999px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    pointer-events: auto;
-    cursor: pointer;
-    white-space: nowrap;
-    transform: translate(-50%, -50%);
-    z-index: 10;
+/* Legend for output port conditions */
+.condition-legend {
+    display: inline-flex;
+    gap: 0.75rem;
+    font-size: 0.75rem;
 }
-
-.chain-condition-tag[data-condition="success"] {
-    background: var(--color-success-bg);
-    color: var(--color-success);
-    border: 1px solid var(--color-success-border);
+.condition-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
 }
-
-.chain-condition-tag[data-condition="failure"] {
-    background: var(--color-error-bg);
-    color: var(--color-error);
-    border: 1px solid var(--color-error-border);
+.condition-legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid;
+    display: inline-block;
 }
-
-.chain-condition-tag[data-condition="any"] {
-    background: var(--color-info-bg);
-    color: var(--color-info);
-    border: 1px solid var(--color-info-border);
+.condition-legend-dot.dot-success {
+    border-color: var(--color-success);
+}
+.condition-legend-dot.dot-failure {
+    border-color: var(--color-error);
+}
+.condition-legend-dot.dot-any {
+    border-color: var(--color-info);
 }
 
 /* ===== Form with Chat layout ===== */
