@@ -200,6 +200,52 @@ curl -s http://127.0.0.1:8899/api/executions?job_id=<id>&limit=1
 
 ---
 
+## Job Environment Variables
+
+ジョブ実行時に mogiri が自動的にセットする環境変数です。
+
+### 全ジョブ共通
+
+| 変数 | 説明 |
+|---|---|
+| `MOGIRI_OUTPUT` | 出力ファイルのパス。ここに書き込んだ内容が、Workflow の次のジョブに `MOGIRI_PARENT_OUTPUT` として渡される |
+
+### Workflow チェーンジョブ（親ジョブから実行された場合のみ）
+
+| 変数 | 説明 |
+|---|---|
+| `MOGIRI_PARENT_OUTPUT` | 親ジョブが `MOGIRI_OUTPUT` に書き込んだ内容 |
+| `MOGIRI_PARENT_JOB_NAME` | 親ジョブの名前 |
+| `MOGIRI_PARENT_STATUS` | 親ジョブの終了ステータス (`success` / `failed` / `timeout`) |
+| `MOGIRI_PARENT_EXIT_CODE` | 親ジョブの終了コード |
+| `MOGIRI_PARENT_STDOUT` | 親ジョブの stdout（末尾 4000 文字） |
+| `MOGIRI_PARENT_STDERR` | 親ジョブの stderr（末尾 4000 文字） |
+| `MOGIRI_PARENT_EXECUTION_ID` | 親ジョブの Execution ID |
+
+### Workflow でのデータ受け渡し例
+
+```bash
+# ジョブ A（親）
+echo "backup completed: /tmp/backup_20240418.sql" >> $MOGIRI_OUTPUT
+
+# ジョブ B（子） — 親の出力を利用
+echo "Parent output: $MOGIRI_PARENT_OUTPUT"
+```
+
+```python
+# ジョブ A（親・Python）
+import os
+with open(os.environ["MOGIRI_OUTPUT"], "a") as f:
+    f.write("processed 1234 records\n")
+
+# ジョブ B（子・Python）
+import os
+parent_output = os.environ.get("MOGIRI_PARENT_OUTPUT", "")
+print(f"Parent said: {parent_output}")
+```
+
+---
+
 ## Configuration
 
 `mogiri init` で `~/.mogiri/config.yaml` にサンプルが生成されます。

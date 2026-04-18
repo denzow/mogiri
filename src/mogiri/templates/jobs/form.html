@@ -68,6 +68,22 @@
                                   placeholder="import os&#10;print('Hello from mogiri!')">{{ j.command if j and j.command_type == 'python' else '' }}</textarea>
                     </div>
 
+                    <details class="env-vars-help">
+                        <summary>Available Environment Variables</summary>
+                        <div class="env-vars-help-body">
+                            <dl>
+                                <dt><code>$MOGIRI_OUTPUT</code></dt>
+                                <dd>Workflow で次のジョブにデータを渡すための出力ファイル。<code>echo "..." >> $MOGIRI_OUTPUT</code> で書き込む</dd>
+                                <dt><code>$MOGIRI_PARENT_OUTPUT</code></dt>
+                                <dd>Workflow で親ジョブが <code>$MOGIRI_OUTPUT</code> に書き込んだ内容</dd>
+                                <dt><code>$MOGIRI_PARENT_STATUS</code></dt>
+                                <dd>親ジョブのステータス (<code>success</code> / <code>failed</code> / <code>timeout</code>)</dd>
+                                <dt><code>$MOGIRI_PARENT_STDOUT</code></dt>
+                                <dd>親ジョブの stdout（末尾 4000 文字）</dd>
+                            </dl>
+                        </div>
+                    </details>
+
                     <input type="hidden" id="command" name="command" value="{{ j.command if j else '' }}">
 
                     <label for="working_dir">Working Directory</label>
