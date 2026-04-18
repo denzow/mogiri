@@ -119,6 +119,22 @@ def workflow_run(workflow_id):
     return "", 200, {"HX-Refresh": "true"}
 
 
+@bp.route("/<workflow_id>/cancel", methods=["POST"])
+def workflow_cancel(workflow_id):
+    from mogiri.scheduler import cancel_workflow
+
+    wf = db.session.get(Workflow, workflow_id)
+    if not wf:
+        abort(404)
+
+    count = cancel_workflow(wf.id)
+    if count > 0:
+        flash(f"Cancelled {count} running execution(s) in '{wf.name}'.", "info")
+    else:
+        flash(f"No running executions in '{wf.name}'.", "info")
+    return "", 200, {"HX-Refresh": "true"}
+
+
 # ---------- Workflow editor ----------
 
 @bp.route("/<workflow_id>/edit")

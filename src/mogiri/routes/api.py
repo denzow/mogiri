@@ -6,6 +6,7 @@ from flask import Blueprint, jsonify, request
 from mogiri.models import Execution, Job, Setting, Workflow, db
 from mogiri.scheduler import (
     cancel_execution,
+    cancel_workflow,
     execute_job,
     execute_workflow,
     register_job,
@@ -304,6 +305,17 @@ def run_workflow(workflow_id):
     )
     thread.start()
     return jsonify({"message": f"Workflow '{wf.name}' triggered"}), 202
+
+
+@bp.route("/workflows/<workflow_id>/cancel", methods=["POST"])
+def cancel_workflow_api(workflow_id):
+    wf = db.session.get(Workflow, workflow_id)
+    if not wf:
+        return jsonify({"error": "Workflow not found"}), 404
+    count = cancel_workflow(workflow_id)
+    if count > 0:
+        return jsonify({"message": f"Cancelled {count} running execution(s)"})
+    return jsonify({"message": "No running executions to cancel"})
 
 
 # ---------- Execution API ----------
