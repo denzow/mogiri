@@ -30,7 +30,7 @@ def update():
     Setting.set("global_env_vars", json.dumps(env_vars))
 
     ai_provider = request.form.get("ai_provider", "claude")
-    if ai_provider in ("claude", "gemini"):
+    if ai_provider in ("claude", "gemini", "codex"):
         Setting.set("ai_provider", ai_provider)
 
     flash("Settings saved.", "success")

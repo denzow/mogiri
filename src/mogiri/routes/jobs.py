@@ -359,6 +359,10 @@ def ai_chat():
         full_prompt = f"[System]\n{system_prompt}\n\n[User]\n{prompt}"
         cmd = ["gemini", "-p", full_prompt]
         cmd_label = "gemini"
+    elif ai_provider == "codex":
+        full_prompt = f"[System]\n{system_prompt}\n\n[User]\n{prompt}"
+        cmd = ["codex", "-q", full_prompt]
+        cmd_label = "codex"
     else:
         cmd = ["claude", "-p", "--system-prompt", system_prompt, prompt]
         cmd_label = "claude"
