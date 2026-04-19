@@ -6,22 +6,22 @@
 </div>
 
 <div class="stat-grid">
-    <div class="stat-card">
+    <a href="{{ url_for('jobs.job_list') }}" class="stat-card stat-card-link">
         <div class="stat-value">{{ total_jobs }}</div>
         <div class="stat-label">Total Jobs</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{ url_for('jobs.job_list') }}" class="stat-card stat-card-link">
         <div class="stat-value">{{ scheduled_jobs }}</div>
         <div class="stat-label">Scheduled Jobs</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{ url_for('workflows.workflow_list') }}" class="stat-card stat-card-link">
         <div class="stat-value">{{ total_workflows }}</div>
         <div class="stat-label">Total Workflows</div>
-    </div>
-    <div class="stat-card">
+    </a>
+    <a href="{{ url_for('workflows.workflow_list') }}" class="stat-card stat-card-link">
         <div class="stat-value">{{ scheduled_workflows }}</div>
         <div class="stat-label">Scheduled Workflows</div>
-    </div>
+    </a>
 </div>
 
 <h2 class="section-title">Recent Executions</h2>

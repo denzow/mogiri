@@ -238,6 +238,12 @@ code {
     transition: box-shadow 0.2s ease;
 }
 
+.stat-card-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}
+
 .stat-card:hover {
     box-shadow: var(--shadow-md);
 }
