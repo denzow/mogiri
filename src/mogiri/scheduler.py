@@ -154,12 +154,16 @@ def _kill_process(proc):
     """Kill a process and its children."""
     try:
         os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-    except (OSError, ProcessLookupError):
-        pass
+    except ProcessLookupError:
+        pass  # Process already exited
+    except OSError as e:
+        print(f"[mogiri] Warning: failed to kill process group {proc.pid}: {e}")
     try:
         proc.kill()
-    except (OSError, ProcessLookupError):
-        pass
+    except ProcessLookupError:
+        pass  # Process already exited
+    except OSError as e:
+        print(f"[mogiri] Warning: failed to kill process {proc.pid}: {e}")
 
 
 def cancel_workflow(workflow_id: str) -> int:
@@ -208,8 +212,8 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
         entry_nodes = []
         try:
             entry_nodes = json.loads(wf.entry_node_keys or "[]")
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"[mogiri] Warning: failed to parse entry_node_keys for workflow {wf.id}: {e}")
 
         if entry_nodes:
             launched = False
@@ -242,8 +246,8 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
         entry_ids = set()
         try:
             entry_ids = set(json.loads(wf.entry_job_ids or "[]"))
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"[mogiri] Warning: failed to parse entry_job_ids for workflow {wf.id}: {e}")
 
         if not entry_ids:
             # Fallback: auto-detect
@@ -303,14 +307,14 @@ def execute_job(
         try:
             global_env = json.loads(Setting.get("global_env_vars", "{}"))
             env.update(global_env)
-        except (json.JSONDecodeError, TypeError):
-            pass
+        except (json.JSONDecodeError, TypeError) as e:
+            print(f"[mogiri] Warning: failed to parse global env vars: {e}")
         # Job-specific vars override global ones
         if job.env_vars:
             try:
                 env.update(json.loads(job.env_vars))
-            except (json.JSONDecodeError, TypeError):
-                pass
+            except (json.JSONDecodeError, TypeError) as e:
+                print(f"[mogiri] Warning: failed to parse env vars for job {job.id}: {e}")
 
         # Inject parent execution info for chain jobs
         if triggered_by_execution_id:

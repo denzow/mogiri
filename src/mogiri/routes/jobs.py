@@ -55,7 +55,7 @@ def _get_samples_reference():
                 with open(filepath, encoding="utf-8") as f:
                     content = f.read()
                 parts.append(f"--- {filename} ---\n{content}\n")
-            except Exception:
+            except (OSError, UnicodeDecodeError):
                 continue
 
         _samples_cache = "\n".join(parts)
