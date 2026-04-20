@@ -104,6 +104,7 @@ def _add_scheduler_workflow(wf):
     try:
         trigger = _make_trigger(wf.schedule_type, wf.schedule_value)
         if trigger is None:
+            unregister_workflow(wf.id)
             return
         scheduler.add_job(
             execute_workflow,
