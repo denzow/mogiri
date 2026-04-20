@@ -22,6 +22,7 @@ from flask import url_for as _url_for
 from mogiri.models import Execution, Job, Setting, db
 from mogiri.scheduler import execute_job, register_job, unregister_job
 
+_cache_lock = threading.Lock()
 _samples_cache = None
 _packages_cache = None
 
@@ -32,29 +33,33 @@ def _get_samples_reference():
     if _samples_cache is not None:
         return _samples_cache
 
-    samples_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "samples")
-    samples_dir = os.path.abspath(samples_dir)
-    if not os.path.isdir(samples_dir):
-        _samples_cache = ""
+    with _cache_lock:
+        if _samples_cache is not None:
+            return _samples_cache
+
+        samples_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "samples")
+        samples_dir = os.path.abspath(samples_dir)
+        if not os.path.isdir(samples_dir):
+            _samples_cache = ""
+            return _samples_cache
+
+        parts = ["The following sample scripts are available as references:\n"]
+
+        for filename in sorted(os.listdir(samples_dir)):
+            filepath = os.path.join(samples_dir, filename)
+            if not os.path.isfile(filepath):
+                continue
+            if filename.startswith("."):
+                continue
+            try:
+                with open(filepath, encoding="utf-8") as f:
+                    content = f.read()
+                parts.append(f"--- {filename} ---\n{content}\n")
+            except Exception:
+                continue
+
+        _samples_cache = "\n".join(parts)
         return _samples_cache
-
-    parts = ["The following sample scripts are available as references:\n"]
-
-    for filename in sorted(os.listdir(samples_dir)):
-        filepath = os.path.join(samples_dir, filename)
-        if not os.path.isfile(filepath):
-            continue
-        if filename.startswith("."):
-            continue
-        try:
-            with open(filepath, encoding="utf-8") as f:
-                content = f.read()
-            parts.append(f"--- {filename} ---\n{content}\n")
-        except Exception:
-            continue
-
-    _samples_cache = "\n".join(parts)
-    return _samples_cache
 
 
 def _get_installed_packages():
@@ -63,12 +68,16 @@ def _get_installed_packages():
     if _packages_cache is not None:
         return _packages_cache
 
-    packages = sorted(
-        {d.metadata["Name"] for d in importlib.metadata.distributions()},
-        key=str.lower,
-    )
-    _packages_cache = ", ".join(packages)
-    return _packages_cache
+    with _cache_lock:
+        if _packages_cache is not None:
+            return _packages_cache
+
+        packages = sorted(
+            {d.metadata["Name"] for d in importlib.metadata.distributions()},
+            key=str.lower,
+        )
+        _packages_cache = ", ".join(packages)
+        return _packages_cache
 
 
 def _schedule_ctx(job):

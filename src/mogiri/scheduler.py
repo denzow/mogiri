@@ -182,9 +182,9 @@ def cancel_execution(execution_id: str) -> bool:
     """Cancel a running execution. Returns True if cancellation was initiated."""
     with _running_lock:
         proc = _running_processes.get(execution_id)
-    if proc is None:
-        return False
-    _is_cancelled.add(execution_id)
+        if proc is None:
+            return False
+        _is_cancelled.add(execution_id)
     _kill_process(proc)
     return True
 
@@ -381,7 +381,9 @@ def execute_job(
                 execution.exit_code = -1
             else:
                 # Check if cancelled during execution
-                if execution.id in _is_cancelled:
+                with _running_lock:
+                    cancelled = execution.id in _is_cancelled
+                if cancelled:
                     execution.stdout = stdout or ""
                     execution.stderr = stderr or ""
                     execution.status = "cancelled"
@@ -398,7 +400,7 @@ def execute_job(
         finally:
             with _running_lock:
                 _running_processes.pop(execution.id, None)
-            _is_cancelled.discard(execution.id)
+                _is_cancelled.discard(execution.id)
             if tmp_script is not None:
                 try:
                     os.unlink(tmp_script.name)
