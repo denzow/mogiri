@@ -1,3 +1,5 @@
+import json as _json
+
 from flask import (
     Blueprint,
     abort,
@@ -165,7 +167,6 @@ def workflow_editor(workflow_id):
         for e in edges
     ]
 
-    import json as _json
     entry_job_ids = []
     try:
         entry_job_ids = _json.loads(wf.entry_job_ids or "[]")
@@ -203,8 +204,6 @@ def workflow_save(workflow_id):
     data = request.get_json()
     if not data:
         return jsonify({"error": "No data"}), 400
-
-    import json as _json
 
     from mogiri.scheduler import register_workflow
 
@@ -269,6 +268,38 @@ def workflow_save(workflow_id):
     db.session.commit()
     register_workflow(wf)
     return jsonify({"ok": True})
+
+
+@bp.route("/<workflow_id>/quick-job", methods=["POST"])
+def quick_create_job(workflow_id):
+    """Create a job from the workflow editor (Web UI, CSRF-protected)."""
+    wf = db.session.get(Workflow, workflow_id)
+    if not wf:
+        return jsonify({"error": "Workflow not found"}), 404
+
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Request body required"}), 400
+
+    name = (data.get("name") or "").strip()
+    command = (data.get("command") or "").strip()
+    if not name or not command:
+        return jsonify({"error": "name and command are required"}), 400
+
+    from mogiri.scheduler import register_job
+
+    job = Job(
+        name=name,
+        command_type=data.get("command_type", "shell"),
+        command=command,
+        schedule_type="none",
+    )
+    db.session.add(job)
+    db.session.commit()
+    register_job(job)
+    return jsonify({
+        "id": job.id, "name": job.name, "command_type": job.command_type,
+    }), 201
 
 
 # ---------- History ----------

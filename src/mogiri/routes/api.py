@@ -1,7 +1,7 @@
 import json
 import threading
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, current_app, jsonify, request
 
 from mogiri.models import Execution, Job, Setting, Workflow, db
 from mogiri.scheduler import (
@@ -16,6 +16,25 @@ from mogiri.scheduler import (
 )
 
 bp = Blueprint("api", __name__, url_prefix="/api")
+
+
+@bp.before_request
+def require_api_token():
+    """Check Bearer token on all API requests when auth is enabled."""
+    if not current_app.config.get("AUTH_ENABLED", True):
+        return
+    expected = current_app.config.get("API_TOKEN")
+    if not expected:
+        return
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        if token == expected:
+            return
+    return jsonify({
+        "error": "Authentication required."
+        " Provide Authorization: Bearer <token> header.",
+    }), 401
 
 
 def _job_to_dict(job):

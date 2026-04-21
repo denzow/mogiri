@@ -23,6 +23,15 @@ def serve(config_path, host, port, debug):
     run_host = host or app.config.get("SERVER_HOST", "127.0.0.1")
     run_port = port or app.config.get("SERVER_PORT", 8899)
 
+    # Block non-localhost binding without a password
+    if run_host not in ("127.0.0.1", "localhost", "::1"):
+        if not app.config.get("AUTH_PASSWORD"):
+            raise click.ClickException(
+                f"Binding to '{run_host}' requires a password. "
+                "Set auth.password in config.yaml or "
+                "MOGIRI_PASSWORD environment variable."
+            )
+
     app.run(host=run_host, port=run_port, debug=debug, use_reloader=False)
 
 
@@ -59,6 +68,14 @@ log:
   retention_days: 30
   # Keep at most this many executions per job (0 = unlimited)
   max_per_job: 100
+
+auth:
+  # Set to false to disable API token authentication
+  # (not recommended when using --host 0.0.0.0)
+  enabled: true
+  # Set a password to protect the Web UI (required for --host 0.0.0.0)
+  # Can also be set via MOGIRI_PASSWORD environment variable
+  password: ""
 """
     dest.write_text(sample)
     click.echo(f"Config written to {dest}")

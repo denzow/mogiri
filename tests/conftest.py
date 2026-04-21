@@ -12,6 +12,8 @@ def app(tmp_path):
             "TESTING": True,
             "SQLALCHEMY_DATABASE_URI": f"sqlite:///{tmp_path / 'test.db'}",
             "DATA_DIR": tmp_path,
+            "WTF_CSRF_ENABLED": False,
+            "AUTH_ENABLED": False,
         }
     )
     # Set app reference for execute_job to use in tests

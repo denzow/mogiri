@@ -394,7 +394,10 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
     fetch('{{ url_for("workflows.workflow_save", workflow_id=workflow.id) }}', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+        },
         body: JSON.stringify({
             name: document.getElementById('wf-name').value,
             description: document.getElementById('wf-description').value,
@@ -453,14 +456,16 @@ function createQuickJob() {
         return;
     }
 
-    fetch('/api/jobs', {
+    fetch('{{ url_for("workflows.quick_create_job", workflow_id=workflow.id) }}', {
         method: 'POST',
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]').content,
+        },
         body: JSON.stringify({
             name: name,
             command: command,
             command_type: commandType,
-            schedule_type: 'none',
         }),
     })
     .then(r => r.json().then(data => ({ok: r.ok, data})))

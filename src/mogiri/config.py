@@ -1,4 +1,5 @@
 import os
+import secrets
 from pathlib import Path
 
 import yaml
@@ -14,6 +15,10 @@ DEFAULTS = {
     "log": {
         "retention_days": 30,
         "max_per_job": 100,
+    },
+    "auth": {
+        "enabled": True,
+        "password": "",
     },
 }
 
@@ -39,12 +44,28 @@ def load_yaml_config(config_path=None):
             merged[section][key] = file_section.get(key, default)
 
     # Environment variables override everything
+    # Environment variables override everything
+    if os.environ.get("MOGIRI_PASSWORD"):
+        merged["auth"]["password"] = os.environ["MOGIRI_PASSWORD"]
+
     if os.environ.get("MOGIRI_LOG_RETENTION_DAYS"):
         merged["log"]["retention_days"] = int(os.environ["MOGIRI_LOG_RETENTION_DAYS"])
     if os.environ.get("MOGIRI_LOG_MAX_PER_JOB"):
         merged["log"]["max_per_job"] = int(os.environ["MOGIRI_LOG_MAX_PER_JOB"])
 
     return merged
+
+
+def ensure_api_token(data_dir):
+    """Load or create the API token file at data_dir/api_token."""
+    token_path = Path(data_dir) / "api_token"
+    if token_path.exists():
+        return token_path.read_text().strip()
+    token = secrets.token_urlsafe(32)
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    token_path.write_text(token + "\n")
+    token_path.chmod(0o600)
+    return token
 
 
 class Config:
@@ -66,4 +87,6 @@ class Config:
             "SERVER_PORT": cfg["server"]["port"],
             "LOG_RETENTION_DAYS": cfg["log"]["retention_days"],
             "LOG_MAX_PER_JOB": cfg["log"]["max_per_job"],
+            "AUTH_ENABLED": cfg["auth"]["enabled"],
+            "AUTH_PASSWORD": cfg["auth"]["password"],
         }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}mogiri{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,7 +13,7 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
-<body>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token() }}"}'>
     <nav class="site-nav">
         <div class="nav-inner">
             <a href="{{ url_for('dashboard.index') }}" class="nav-brand">
@@ -28,6 +29,12 @@
                    class="nav-link {% if request.endpoint and request.endpoint.startswith('workflows.') %}active{% endif %}">Workflows</a>
                 <a href="{{ url_for('settings.index') }}"
                    class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}active{% endif %}">Settings</a>
+                {% if config.get('AUTH_PASSWORD') %}
+                <form method="post" action="{{ url_for('auth.logout') }}" style="display:inline; margin-left: 0.5rem;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="nav-link" style="background:none; border:none; cursor:pointer; font:inherit; color:inherit; padding:0;">Logout</button>
+                </form>
+                {% endif %}
             </div>
         </div>
     </nav>

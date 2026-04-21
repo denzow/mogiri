@@ -8,21 +8,36 @@ import os
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import click
 
 
 class MogiriClient:
-    def __init__(self, base_url=None):
+    def __init__(self, base_url=None, token=None):
         self.base_url = (
             base_url or os.environ.get("MOGIRI_URL", "http://127.0.0.1:8899")
         ).rstrip("/")
+        self.token = (
+            token or os.environ.get("MOGIRI_API_TOKEN") or self._load_token_file()
+        )
+
+    @staticmethod
+    def _load_token_file():
+        """Try to read the API token from the default location."""
+        token_path = Path.home() / ".mogiri" / "api_token"
+        try:
+            return token_path.read_text().strip()
+        except (OSError, FileNotFoundError):
+            return None
 
     def _request(self, method, path, data=None):
         url = f"{self.base_url}{path}"
         body = json.dumps(data).encode("utf-8") if data is not None else None
         req = urllib.request.Request(url, data=body, method=method)
         req.add_header("Content-Type", "application/json")
+        if self.token:
+            req.add_header("Authorization", f"Bearer {self.token}")
         try:
             with urllib.request.urlopen(req) as resp:
                 return json.loads(resp.read().decode())
@@ -107,12 +122,14 @@ def _resolve_id(client, resource, short_id):
 @click.option("--json", "use_json", is_flag=True, help="Output as JSON")
 @click.option("--url", envvar="MOGIRI_URL", default="http://127.0.0.1:8899",
               help="mogiri server URL")
+@click.option("--token", envvar="MOGIRI_API_TOKEN", default=None,
+              help="API token (or set MOGIRI_API_TOKEN / ~/.mogiri/api_token)")
 @click.pass_context
-def cli(ctx, use_json, url):
+def cli(ctx, use_json, url, token):
     """mogiricli - CLI client for mogiri job manager."""
     ctx.ensure_object(dict)
     ctx.obj["json"] = use_json
-    ctx.obj["client"] = MogiriClient(url)
+    ctx.obj["client"] = MogiriClient(url, token=token)
 
 
 # ---------- Jobs ----------

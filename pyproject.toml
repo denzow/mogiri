@@ -11,6 +11,7 @@ dependencies = [
     "pyyaml>=6.0",
     "flask-migrate>=4.0",
     "slack-sdk>=3.27",
+    "flask-wtf>=1.2",
 ]
 
 [project.optional-dependencies]

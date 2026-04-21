@@ -4,14 +4,16 @@ import os
 
 from flask import Flask
 from flask_migrate import Migrate, upgrade
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy import inspect
 
-from mogiri.config import Config
+from mogiri.config import Config, ensure_api_token
 from mogiri.models import db
 from mogiri.routes import register_routes
 from mogiri.scheduler import init_scheduler, shutdown_scheduler
 
 migrate = Migrate()
+csrf = CSRFProtect()
 
 
 def _get_migrations_dir(app):
@@ -37,6 +39,9 @@ def create_app(config=None, config_path=None):
     data_dir = app.config.get("DATA_DIR", Config.DATA_DIR)
     data_dir.mkdir(parents=True, exist_ok=True)
 
+    if app.config.get("AUTH_ENABLED", True) and not app.config.get("TESTING"):
+        app.config["API_TOKEN"] = ensure_api_token(data_dir)
+
     db.init_app(app)
 
     migrations_dir = _get_migrations_dir(app)
@@ -54,6 +59,10 @@ def create_app(config=None, config_path=None):
     app.jinja_env.filters["from_json"] = json.loads
 
     register_routes(app)
+
+    csrf.init_app(app)
+    from mogiri.routes.api import bp as api_bp
+    csrf.exempt(api_bp)
 
     if not app.config.get("TESTING"):
         init_scheduler(app)
