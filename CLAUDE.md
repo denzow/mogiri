@@ -60,7 +60,8 @@ src/mogiri/
   cli.py             # Click CLI entry point (mogiri serve, mogiri init)
   mogiricli.py       # CLI client (mogiricli) — wraps REST API for terminal/Claude Code use
   routes/
-    __init__.py      # register_routes — wires all blueprints
+    __init__.py      # register_routes — wires all blueprints + password auth middleware
+    auth.py          # Login/logout routes for password authentication
     api.py           # REST API: /api/jobs, /api/workflows, /api/executions, /api/settings
     dashboard.py     # GET / — overview with recent executions
     jobs.py          # Job CRUD, toggle, run-now, cron preview, AI chat
@@ -83,9 +84,14 @@ server:
 log:
   retention_days: 30    # 0 = keep forever
   max_per_job: 100      # 0 = unlimited
+auth:
+  enabled: true         # API token auth (false to disable)
+  password: ""          # Web UI password (required for --host 0.0.0.0)
 ```
 
 Priority: env vars > YAML > defaults. CLI flags (`--host`, `--port`) override YAML.
+
+Additional env vars: `MOGIRI_PASSWORD` (Web UI password), `MOGIRI_SECRET_KEY` (Flask session key), `MOGIRI_API_TOKEN` (API token override).
 
 ## Key Design Decisions
 
@@ -95,13 +101,15 @@ Priority: env vars > YAML > defaults. CLI flags (`--host`, `--port`) override YA
 - **Environment variables**: Global env vars in `Setting` table, per-job env vars in `jobs.env_vars` (JSON). At execution: `os.environ` + global + job-specific (later overrides earlier).
 - **Data directory** defaults to `~/.mogiri/`, overridable via `MOGIRI_DATA_DIR` env var.
 - **Workflows** define DAGs of jobs with edges (success/failure/any conditions). Entry jobs are stored in `Workflow.entry_job_ids`. Cycle detection prevents invalid graphs.
-- **Chain execution** runs in threads; `_chain_visited` set prevents runtime cycles.
+- **Chain execution** runs in threads; `max_iterations` per workflow limits loop visits per node.
+- **Job timeout**: `Job.timeout_seconds` (None=default 3600s, 0=unlimited). Used in `proc.communicate(timeout=...)`.
+- **Security**: CSRF protection (Flask-WTF, exempt on `/api/*`), API token auth (auto-generated `~/.mogiri/api_token`), optional password login (`auth.password`). Non-localhost binding requires password.
 - **Log rotation** runs daily at 03:00 via APScheduler (configurable retention).
 - **Migrations auto-applied** on startup; tests use `db.create_all()` instead.
 
 ## Data Model
 
-- **Job**: name, description, command_type (shell/python), command, schedule_type (cron/once/none), schedule_value, env_vars (JSON), is_enabled
+- **Job**: name, description, command_type (shell/python), command, schedule_type (cron/once/none), schedule_value, env_vars (JSON), timeout_seconds, is_enabled
 - **Execution**: job_id (FK), status (running/success/failed/timeout), exit_code, stdout, stderr, started_at, finished_at, workflow_id (FK), triggered_by_execution_id (FK), triggered_by_chain_id (FK)
 - **Workflow**: name, description, is_enabled, schedule_type, schedule_value, entry_job_ids (JSON), start_node_x/y
 - **WorkflowEdge**: workflow_id (FK), source_job_id (FK), target_job_id (FK), trigger_condition (success/failure/any)

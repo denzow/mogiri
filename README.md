@@ -53,8 +53,10 @@
 | **AI Assistant** | ジョブ作成画面で Claude / Gemini CLI によるスクリプト生成支援 |
 | **Environment Variables** | グローバル + ジョブ別の環境変数。チェーン実行時は親ジョブの結果を自動注入 |
 | **Execution Logs** | stdout / stderr を保存し、Web UI から閲覧。自動ローテーション対応 |
-| **REST API** | ジョブ・ワークフロー・実行履歴・設定の JSON API |
+| **Job Timeout** | ジョブごとにタイムアウトを設定可能。暴走プロセスを防止 |
+| **REST API** | ジョブ・ワークフロー・実行履歴・設定の JSON API（トークン認証付き） |
 | **CLI Client** | `mogiricli` コマンドでターミナル / Claude Code からジョブ管理 |
+| **Security** | CSRF 保護、API トークン認証、パスワードログイン対応 |
 | **Sample Scripts** | Slack 通知、DB バックアップ、ヘルスチェック等のサンプル集 |
 
 ## Quick Start
