@@ -14,6 +14,10 @@
   <img src="https://img.shields.io/badge/UI-htmx%20%2B%20Pico-orange" alt="UI">
 </p>
 
+<p align="center">
+  日本語 | <a href="README.en.md">English</a>
+</p>
+
 ---
 
 ローカルで動作するシンプルなジョブ管理ツール。Web UI からジョブの作成・スケジュール実行・ログ閲覧ができます。
