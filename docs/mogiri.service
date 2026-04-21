@@ -1,0 +1,16 @@
+[Unit]
+Description=mogiri - Local Job Manager
+After=network.target
+
+[Service]
+Type=simple
+# mogiri コマンドのフルパスを指定してください
+# 確認方法: which mogiri (pyenv の場合: pyenv which mogiri)
+ExecStart=%h/.pyenv/versions/mogiri/bin/mogiri serve
+Restart=on-failure
+RestartSec=5
+# ポートやホストを変更する場合:
+# ExecStart=%h/.pyenv/versions/mogiri/bin/mogiri serve --host 0.0.0.0 --port 9000
+
+[Install]
+WantedBy=default.target

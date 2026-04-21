@@ -281,6 +281,76 @@ log:
 
 ---
 
+## Autostart (systemd)
+
+Linux (Ubuntu等) で OS 起動時に mogiri を自動起動するには、systemd のユーザーサービスを使います。
+
+### 1. サンプルをコピー
+
+```bash
+mkdir -p ~/.config/systemd/user
+cp docs/mogiri.service ~/.config/systemd/user/mogiri.service
+```
+
+### 2. ExecStart のパスを確認・修正
+
+unit ファイルの `ExecStart` に `mogiri` コマンドのフルパスを設定してください。
+
+```bash
+# pyenv の場合
+pyenv which mogiri
+# 例: /home/youruser/.pyenv/versions/mogiri/bin/mogiri
+
+# pip でインストールした場合
+which mogiri
+```
+
+出力されたパスが `ExecStart` と異なる場合は修正してください。
+
+### 3. 有効化・起動
+
+```bash
+# systemd にファイルを認識させる
+systemctl --user daemon-reload
+
+# 起動
+systemctl --user start mogiri
+
+# 状態確認
+systemctl --user status mogiri
+
+# OS 起動時の自動起動を有効化
+systemctl --user enable mogiri
+```
+
+### 4. ログイン不要での自動起動
+
+デフォルトではユーザーがログインしている間のみサービスが動作します。
+SSH やデスクトップにログインしていなくても起動させるには **linger** を有効にしてください。
+
+```bash
+sudo loginctl enable-linger $(whoami)
+```
+
+### ログ確認
+
+```bash
+# リアルタイムでログを表示
+journalctl --user -u mogiri -f
+
+# 最近のログを表示
+journalctl --user -u mogiri --since "1 hour ago"
+```
+
+### 停止・無効化
+
+```bash
+systemctl --user stop mogiri      # 停止
+systemctl --user disable mogiri   # 自動起動を無効化
+```
+
+---
+
 ## Development
 
 ```bash
