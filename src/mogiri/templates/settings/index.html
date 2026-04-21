@@ -13,6 +13,7 @@
             Select the CLI tool used for the AI assistant in the job editor.
         </p>
         <form method="post" action="{{ url_for('settings.update') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <!-- preserve env vars so they don't get cleared -->
             {% for key, value in env_vars.items() %}
             <input type="hidden" name="env_key" value="{{ key }}">
@@ -48,6 +49,7 @@
             These variables are applied to all job executions. Job-specific variables override global ones.
         </p>
         <form method="post" action="{{ url_for('settings.update') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div id="env-vars-container">
                 {% for key, value in env_vars.items() %}
                 <div class="env-var-row">

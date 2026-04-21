@@ -10,6 +10,7 @@
     {% if execution.status == 'running' %}
     <div class="actions">
         <form method="post" action="{{ url_for('executions.execution_cancel', execution_id=execution.id) }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-danger btn-sm"
                     onclick="return confirm('Cancel this execution?')">Cancel</button>
         </form>
