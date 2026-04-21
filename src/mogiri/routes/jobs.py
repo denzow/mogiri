@@ -81,6 +81,25 @@ def _get_installed_packages():
         return _packages_cache
 
 
+def _find_referenced_jobs(message):
+    """Find jobs referenced by name or ID in the user message."""
+    if not message.strip():
+        return []
+    all_jobs = Job.query.all()
+    matched = []
+    seen_ids = set()
+    for job in all_jobs:
+        if job.id in seen_ids:
+            continue
+        if job.name and job.name in message:
+            matched.append(job)
+            seen_ids.add(job.id)
+        elif job.id in message:
+            matched.append(job)
+            seen_ids.add(job.id)
+    return matched
+
+
 def _schedule_ctx(job):
     """Build template context variables for the cron_editor partial."""
     st = job.schedule_type if job else "cron"
@@ -344,6 +363,10 @@ def ai_chat():
         "The user will apply the code block "
         "as a whole replacement. "
         "Keep responses concise and focused on the task.\n\n"
+        "When the user mentions another job by name or ID, "
+        "the referenced job's details (command, description) "
+        "will be provided as context. "
+        "Use them to help the user.\n\n"
         "mogiri sets the following environment variables "
         "when executing jobs:\n"
         "- MOGIRI_OUTPUT: Path to a temporary file. "
@@ -377,6 +400,9 @@ def ai_chat():
         + _get_samples_reference()
     )
 
+    # Find referenced jobs by name or ID in user message
+    referenced_jobs = _find_referenced_jobs(message)
+
     # Build prompt with conversation context
     prompt_parts = []
     if job_name.strip():
@@ -384,6 +410,20 @@ def ai_chat():
         if job_description.strip():
             job_ctx += f"\nJob description: {job_description}"
         prompt_parts.append(job_ctx)
+    if referenced_jobs:
+        ref_parts = ["Referenced jobs from mogiri:"]
+        for rj in referenced_jobs:
+            ref_parts.append(
+                f"- Job \"{rj.name}\" (ID: {rj.id}, "
+                f"type: {rj.command_type}):"
+            )
+            if rj.description:
+                ref_parts.append(f"  Description: {rj.description}")
+            cmd = rj.command or ""
+            if len(cmd) > 2000:
+                cmd = cmd[:2000] + "\n... (truncated)"
+            ref_parts.append(f"  Command:\n```\n{cmd}\n```")
+        prompt_parts.append("\n".join(ref_parts))
     if history:
         for msg in history:
             role = "User" if msg.get("role") == "user" else "Assistant"
