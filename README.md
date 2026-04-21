@@ -321,6 +321,12 @@ which mogiri
 
 出力されたパスが `ExecStart` と異なる場合は修正してください。
 
+> **Note**: systemd はシェルの `~/.bashrc` 等を読まないため、ジョブから `claude` や `node` 等のコマンドを使う場合は unit ファイルに `Environment=PATH=...` を追加してください。現在の PATH は `echo $PATH` で確認できます。
+>
+> ```ini
+> Environment=PATH=/home/youruser/.nvm/versions/node/v22.20.0/bin:/home/youruser/.pyenv/versions/mogiri/bin:/usr/local/bin:/usr/bin:/bin
+> ```
+
 ### 3. 有効化・起動
 
 ```bash

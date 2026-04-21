@@ -9,6 +9,10 @@ Type=simple
 ExecStart=%h/.pyenv/versions/mogiri/bin/mogiri serve
 Restart=on-failure
 RestartSec=5
+# systemd はシェルの PATH を引き継がないため、ジョブから claude 等の
+# コマンドを使う場合は PATH を明示的に設定してください
+# 確認方法: echo $PATH
+# Environment=PATH=%h/.nvm/versions/node/v22.20.0/bin:%h/.pyenv/versions/mogiri/bin:%h/.local/bin:/usr/local/bin:/usr/bin:/bin
 # ポートやホストを変更する場合:
 # WARNING: --host 0.0.0.0 exposes mogiri to all networks. See SECURITY.md
 # ExecStart=%h/.pyenv/versions/mogiri/bin/mogiri serve --host 0.0.0.0 --port 9000

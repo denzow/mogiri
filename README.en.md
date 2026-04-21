@@ -328,6 +328,12 @@ which mogiri
 
 Edit the unit file if the path differs.
 
+> **Note**: systemd does not load shell profiles (`~/.bashrc`, etc.). If your jobs use commands like `claude` or `node`, add `Environment=PATH=...` to the unit file. Check your current PATH with `echo $PATH`.
+>
+> ```ini
+> Environment=PATH=/home/youruser/.nvm/versions/node/v22.20.0/bin:/home/youruser/.pyenv/versions/mogiri/bin:/usr/local/bin:/usr/bin:/bin
+> ```
+
 ### 3. Enable and start
 
 ```bash
