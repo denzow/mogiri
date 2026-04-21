@@ -375,8 +375,14 @@ def execute_job(
             with _running_lock:
                 _running_processes[execution.id] = proc
 
+            # Determine timeout: None=default(3600), 0=unlimited
+            if job.timeout_seconds is not None:
+                timeout_val = None if job.timeout_seconds == 0 else job.timeout_seconds
+            else:
+                timeout_val = 3600
+
             try:
-                stdout, stderr = proc.communicate(timeout=3600)
+                stdout, stderr = proc.communicate(timeout=timeout_val)
             except subprocess.TimeoutExpired:
                 _kill_process(proc)
                 stdout, stderr = proc.communicate()

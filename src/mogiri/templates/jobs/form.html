@@ -91,6 +91,12 @@
                            value="{{ j.working_dir if j and j.working_dir else '' }}"
                            placeholder="Leave empty for current directory">
 
+                    <label for="timeout_seconds">Timeout (seconds)</label>
+                    <input type="number" id="timeout_seconds" name="timeout_seconds"
+                           value="{{ j.timeout_seconds if j and j.timeout_seconds is not none else '' }}"
+                           placeholder="Default: 3600 (1 hour), 0 = unlimited"
+                           min="0" step="1">
+
                     {% include "partials/cron_editor.html" with context %}
 
                     <label style="margin-top: 1rem;">

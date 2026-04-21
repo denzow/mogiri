@@ -53,6 +53,7 @@ def _job_to_dict(job):
         "schedule_value": job.schedule_value or "",
         "env_vars": env,
         "working_dir": job.working_dir or "",
+        "timeout_seconds": job.timeout_seconds,
         "is_enabled": job.is_enabled,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "updated_at": job.updated_at.isoformat() if job.updated_at else None,
@@ -109,6 +110,7 @@ def create_job():
         schedule_value=data.get("schedule_value", ""),
         env_vars=env_vars,
         working_dir=data.get("working_dir", ""),
+        timeout_seconds=data.get("timeout_seconds"),
         is_enabled=data.get("is_enabled", True),
     )
     db.session.add(job)
@@ -150,6 +152,8 @@ def update_job(job_id):
         job.env_vars = env_vars
     if "working_dir" in data:
         job.working_dir = data["working_dir"]
+    if "timeout_seconds" in data:
+        job.timeout_seconds = data["timeout_seconds"]
     if "is_enabled" in data:
         job.is_enabled = data["is_enabled"]
 

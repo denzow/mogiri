@@ -220,3 +220,25 @@ def test_rotate_logs_by_max_per_job(app):
 
     with app.app_context():
         assert Execution.query.count() == 3
+
+
+def test_execute_job_timeout(app):
+    """A job with a short timeout should be killed and marked as timeout."""
+    with app.app_context():
+        job = Job(
+            name="timeout test",
+            command="sleep 60",
+            schedule_type="none",
+            timeout_seconds=1,
+        )
+        _db.session.add(job)
+        _db.session.commit()
+        job_id = job.id
+
+    execute_job(job_id)
+
+    with app.app_context():
+        execution = Execution.query.filter_by(job_id=job_id).first()
+        assert execution is not None
+        assert execution.status == "timeout"
+        assert execution.exit_code == -1

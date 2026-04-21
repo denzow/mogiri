@@ -126,6 +126,17 @@ def _parse_env_vars(form):
     return json.dumps(env_dict)
 
 
+def _parse_timeout(form):
+    """Parse timeout_seconds from form. Returns int or None."""
+    val = form.get("timeout_seconds", "").strip()
+    if val == "":
+        return None
+    try:
+        return max(0, int(val))
+    except (ValueError, TypeError):
+        return None
+
+
 @bp.route("/")
 def job_list():
     scheduled_jobs = (
@@ -163,6 +174,7 @@ def job_create():
         schedule_value=_build_schedule(request.form)[1],
         env_vars=_parse_env_vars(request.form),
         working_dir=request.form.get("working_dir", "").strip(),
+        timeout_seconds=_parse_timeout(request.form),
         is_enabled="is_enabled" in request.form,
     )
     db.session.add(job)
@@ -231,6 +243,7 @@ def job_update(job_id):
     job.schedule_value = sched_value
     job.env_vars = _parse_env_vars(request.form)
     job.working_dir = request.form.get("working_dir", "").strip()
+    job.timeout_seconds = _parse_timeout(request.form)
     job.is_enabled = "is_enabled" in request.form
 
     db.session.commit()
