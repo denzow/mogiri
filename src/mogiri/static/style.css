@@ -620,6 +620,7 @@ pre.log-output {
 }
 
 .form-card input[type="text"],
+.form-card input[type="number"],
 .form-card input[type="datetime-local"],
 .form-card select,
 .form-card textarea {
@@ -637,6 +638,7 @@ pre.log-output {
 }
 
 .form-card input[type="text"]:focus,
+.form-card input[type="number"]:focus,
 .form-card input[type="datetime-local"]:focus,
 .form-card textarea:focus {
     border-color: var(--color-primary);
