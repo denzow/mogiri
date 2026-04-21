@@ -5,7 +5,6 @@ import os
 from flask import Flask
 from flask_migrate import Migrate, upgrade
 from flask_wtf.csrf import CSRFProtect
-from sqlalchemy import inspect
 
 from mogiri.config import Config, ensure_api_token
 from mogiri.models import db

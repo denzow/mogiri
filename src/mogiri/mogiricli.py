@@ -5,7 +5,6 @@ Wraps the mogiri REST API for use from the terminal or Claude Code.
 
 import json
 import os
-import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -182,7 +181,7 @@ def jobs_get(ctx, job_id):
     if j.get("env_vars"):
         click.echo(f"  Env Vars:     {json.dumps(j['env_vars'])}")
     click.echo(f"  Created:      {j['created_at']}")
-    click.echo(f"\n--- command ---")
+    click.echo("\n--- command ---")
     click.echo(j["command"])
 
 
@@ -190,14 +189,18 @@ def jobs_get(ctx, job_id):
 @click.option("--name", required=True)
 @click.option("--command", "cmd", required=True)
 @click.option("--command-type", type=click.Choice(["shell", "python"]), default="shell")
-@click.option("--schedule-type", type=click.Choice(["cron", "once", "none"]), default="none")
+@click.option(
+    "--schedule-type",
+    type=click.Choice(["cron", "once", "none"]),
+    default="none",
+)
 @click.option("--schedule-value", default="")
 @click.option("--working-dir", default="")
 @click.option("--description", default="")
 @click.option("--env-vars", default=None, help="JSON object string")
 @click.pass_context
-def jobs_create(ctx, name, cmd, command_type, schedule_type, schedule_value,
-                working_dir, description, env_vars):
+def jobs_create(ctx, name, cmd, command_type, schedule_type,
+                schedule_value, working_dir, description, env_vars):
     """Create a new job."""
     client = ctx.obj["client"]
     data = {
@@ -223,14 +226,19 @@ def jobs_create(ctx, name, cmd, command_type, schedule_type, schedule_value,
 @click.option("--name", default=None)
 @click.option("--command", "cmd", default=None)
 @click.option("--command-type", type=click.Choice(["shell", "python"]), default=None)
-@click.option("--schedule-type", type=click.Choice(["cron", "once", "none"]), default=None)
+@click.option(
+    "--schedule-type",
+    type=click.Choice(["cron", "once", "none"]),
+    default=None,
+)
 @click.option("--schedule-value", default=None)
 @click.option("--working-dir", default=None)
 @click.option("--description", default=None)
 @click.option("--enabled/--disabled", default=None)
 @click.pass_context
-def jobs_update(ctx, job_id, name, cmd, command_type, schedule_type,
-                schedule_value, working_dir, description, enabled):
+def jobs_update(ctx, job_id, name, cmd, command_type,
+                schedule_type, schedule_value, working_dir,
+                description, enabled):
     """Update a job."""
     client = ctx.obj["client"]
     job_id = _resolve_id(client, "jobs", job_id)
@@ -358,16 +366,24 @@ def workflows_get(ctx, workflow_id):
     if wf.get("edges"):
         click.echo(f"\n  Edges ({len(wf['edges'])}):")
         for e in wf["edges"]:
-            click.echo(f"    {_short_id(e['source_job_id'])} --{e['trigger_condition']}--> {_short_id(e['target_job_id'])}")
+            src = _short_id(e['source_job_id'])
+            tgt = _short_id(e['target_job_id'])
+            cond = e['trigger_condition']
+            click.echo(f"    {src} --{cond}--> {tgt}")
 
 
 @workflows.command("create")
 @click.option("--name", required=True)
 @click.option("--description", default="")
-@click.option("--schedule-type", type=click.Choice(["cron", "once", "none"]), default="none")
+@click.option(
+    "--schedule-type",
+    type=click.Choice(["cron", "once", "none"]),
+    default="none",
+)
 @click.option("--schedule-value", default="")
 @click.pass_context
-def workflows_create(ctx, name, description, schedule_type, schedule_value):
+def workflows_create(ctx, name, description, schedule_type,
+                     schedule_value):
     """Create a new workflow."""
     client = ctx.obj["client"]
     wf = client.post("/api/workflows", {
@@ -484,10 +500,10 @@ def executions_get(ctx, execution_id):
         click.echo(f"  Workflow:  {ex['workflow_id']}")
     stdout = ex.get("stdout", "")
     stderr = ex.get("stderr", "")
-    click.echo(f"\n--- stdout ---")
+    click.echo("\n--- stdout ---")
     click.echo(stdout if stdout else "(empty)")
     if stderr:
-        click.echo(f"\n--- stderr ---")
+        click.echo("\n--- stderr ---")
         click.echo(stderr)
 
 

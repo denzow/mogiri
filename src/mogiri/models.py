@@ -46,7 +46,8 @@ class Execution(db.Model):
     finished_at = db.Column(db.DateTime, nullable=True)
     exit_code = db.Column(db.Integer, nullable=True)
     pid = db.Column(db.Integer, nullable=True)
-    status = db.Column(db.String, default="running")  # running, success, failed, timeout
+    # running, success, failed, timeout
+    status = db.Column(db.String, default="running")
     stdout = db.Column(db.Text, default="")
     stderr = db.Column(db.Text, default="")
     node_key = db.Column(db.String, nullable=True)
@@ -76,8 +77,10 @@ class Workflow(db.Model):
     schedule_type = db.Column(db.String, default="none")  # "cron", "once", "none"
     schedule_value = db.Column(db.String, default="")
     entry_job_ids = db.Column(db.Text, default="[]")  # JSON list of job IDs
-    entry_node_keys = db.Column(db.Text, default="[]")  # JSON list of {"node_key", "job_id"}
-    max_iterations = db.Column(db.Integer, default=10)  # Max times a node can be visited (loop limit)
+    # JSON list of {"node_key", "job_id"}
+    entry_node_keys = db.Column(db.Text, default="[]")
+    # Max times a node can be visited (loop limit)
+    max_iterations = db.Column(db.Integer, default=10)
     start_node_x = db.Column(db.Float, default=50)
     start_node_y = db.Column(db.Float, default=250)
     created_at = db.Column(db.DateTime, default=now)

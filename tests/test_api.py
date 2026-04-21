@@ -1,4 +1,5 @@
-from mogiri.models import Execution, Job, Workflow, db as _db
+from mogiri.models import Execution, Job, Workflow
+from mogiri.models import db as _db
 
 
 def test_api_create_job(client, app):

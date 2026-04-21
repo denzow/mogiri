@@ -29,7 +29,10 @@ def test_create_execution(db):
     db.session.add(job)
     db.session.commit()
 
-    execution = Execution(job_id=job.id, status="success", exit_code=0, stdout="hello\n")
+    execution = Execution(
+        job_id=job.id, status="success",
+        exit_code=0, stdout="hello\n",
+    )
     db.session.add(execution)
     db.session.commit()
 

@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
-from mogiri.models import Execution, Job, db as _db
+from mogiri.models import Execution, Job
+from mogiri.models import db as _db
 from mogiri.scheduler import execute_job, rotate_logs
 
 
@@ -174,7 +175,10 @@ def test_rotate_logs_by_retention_days(app):
         app.config["LOG_RETENTION_DAYS"] = 7
         app.config["LOG_MAX_PER_JOB"] = 0  # disable per-job limit
 
-        job = Job(name="rot test", command="echo hi", schedule_type="cron", schedule_value="* * * * *")
+        job = Job(
+            name="rot test", command="echo hi",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
         _db.session.add(job)
         _db.session.commit()
 
@@ -203,7 +207,10 @@ def test_rotate_logs_by_max_per_job(app):
         app.config["LOG_RETENTION_DAYS"] = 0  # disable time-based
         app.config["LOG_MAX_PER_JOB"] = 3
 
-        job = Job(name="max test", command="echo hi", schedule_type="cron", schedule_value="* * * * *")
+        job = Job(
+            name="max test", command="echo hi",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
         _db.session.add(job)
         _db.session.commit()
 

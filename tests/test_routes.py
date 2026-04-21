@@ -1,4 +1,5 @@
-from mogiri.models import Execution, Job, Workflow, db as _db
+from mogiri.models import Execution, Job, Workflow
+from mogiri.models import db as _db
 
 
 def test_dashboard(client):
@@ -148,7 +149,7 @@ def test_dashboard_with_workflow_execution(client, app):
 
 
 def test_job_detail_with_workflow_execution(client, app):
-    """Job detail page must render correctly when executions are linked to a workflow."""
+    """Job detail page renders correctly with workflow executions."""
     job_id, _, _ = _create_workflow_execution(app)
     response = client.get(f"/jobs/{job_id}")
     assert response.status_code == 200

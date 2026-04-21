@@ -1,13 +1,13 @@
 """Test that all migrations apply cleanly from scratch."""
 
 from alembic import command
-from alembic.config import Config as AlembicConfig
 from flask_migrate import Migrate
 
 
 def test_migrations_upgrade_from_scratch(tmp_path):
     """Run all migrations from empty DB to head — catches NOT NULL, bad SQL, etc."""
     from flask import Flask
+
     from mogiri.models import db
 
     app = Flask(__name__)
@@ -36,6 +36,7 @@ def test_migrations_upgrade_from_scratch(tmp_path):
 def test_migrations_downgrade_to_base(tmp_path):
     """Upgrade to head then downgrade to base — catches bad downgrade SQL."""
     from flask import Flask
+
     from mogiri.models import db
 
     app = Flask(__name__)

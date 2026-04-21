@@ -16,7 +16,6 @@ from flask import (
     stream_with_context,
     url_for,
 )
-
 from flask import url_for as _url_for
 
 from mogiri.models import Execution, Job, Setting, db
@@ -37,7 +36,9 @@ def _get_samples_reference():
         if _samples_cache is not None:
             return _samples_cache
 
-        samples_dir = os.path.join(os.path.dirname(__file__), "..", "..", "..", "samples")
+        samples_dir = os.path.join(
+            os.path.dirname(__file__), "..", "..", "..", "samples",
+        )
         samples_dir = os.path.abspath(samples_dir)
         if not os.path.isdir(samples_dir):
             _samples_cache = ""
@@ -84,7 +85,8 @@ def _schedule_ctx(job):
     """Build template context variables for the cron_editor partial."""
     st = job.schedule_type if job else "cron"
     sv = job.schedule_value if job else ""
-    cron_parts = sv.split() if st == "cron" and sv and len(sv.split()) == 5 else ["*"] * 5
+    is_cron = st == "cron" and sv and len(sv.split()) == 5
+    cron_parts = sv.split() if is_cron else ["*"] * 5
     return {
         "prefix": "job",
         "schedule_type": st or "cron",
@@ -329,30 +331,49 @@ def ai_chat():
     ai_provider = Setting.get("ai_provider", "claude")
 
     system_prompt = (
-        "You are an AI assistant embedded in mogiri, a local job manager. "
-        "Help users write shell commands or Python scripts for their scheduled jobs. "
-        "When providing code, always use a fenced code block with the appropriate "
-        "language tag (```bash for shell, ```python for Python). "
-        "IMPORTANT: When modifying existing code, always provide the COMPLETE updated script "
-        "in the code block, not just the changed parts. The user will apply the code block "
+        "You are an AI assistant embedded in mogiri, "
+        "a local job manager. "
+        "Help users write shell commands or Python scripts "
+        "for their scheduled jobs. "
+        "When providing code, always use a fenced code block "
+        "with the appropriate "
+        "language tag (```bash for shell, ```python for Python)."
+        " IMPORTANT: When modifying existing code, always "
+        "provide the COMPLETE updated script "
+        "in the code block, not just the changed parts. "
+        "The user will apply the code block "
         "as a whole replacement. "
         "Keep responses concise and focused on the task.\n\n"
-        "mogiri sets the following environment variables when executing jobs:\n"
-        "- MOGIRI_OUTPUT: Path to a temporary file. Write output here to pass data to "
-        "the next job in a workflow (the next job receives it as MOGIRI_PARENT_OUTPUT).\n"
-        "- MOGIRI_PARENT_OUTPUT: Content written to MOGIRI_OUTPUT by the parent job in a workflow chain.\n"
-        "- MOGIRI_PARENT_EXECUTION_ID: Execution ID of the parent job (workflow chain only).\n"
-        "- MOGIRI_PARENT_STATUS: Exit status of the parent job (success/failed/timeout).\n"
-        "- MOGIRI_PARENT_EXIT_CODE: Exit code of the parent job.\n"
-        "- MOGIRI_PARENT_STDOUT: Last 4000 chars of the parent job's stdout.\n"
-        "- MOGIRI_PARENT_STDERR: Last 4000 chars of the parent job's stderr.\n"
+        "mogiri sets the following environment variables "
+        "when executing jobs:\n"
+        "- MOGIRI_OUTPUT: Path to a temporary file. "
+        "Write output here to pass data to "
+        "the next job in a workflow "
+        "(the next job receives it as MOGIRI_PARENT_OUTPUT).\n"
+        "- MOGIRI_PARENT_OUTPUT: Content written to "
+        "MOGIRI_OUTPUT by the parent job "
+        "in a workflow chain.\n"
+        "- MOGIRI_PARENT_EXECUTION_ID: Execution ID of "
+        "the parent job (workflow chain only).\n"
+        "- MOGIRI_PARENT_STATUS: Exit status of the parent "
+        "job (success/failed/timeout).\n"
+        "- MOGIRI_PARENT_EXIT_CODE: Exit code of "
+        "the parent job.\n"
+        "- MOGIRI_PARENT_STDOUT: Last 4000 chars of "
+        "the parent job's stdout.\n"
+        "- MOGIRI_PARENT_STDERR: Last 4000 chars of "
+        "the parent job's stderr.\n"
         "- MOGIRI_PARENT_JOB_NAME: Name of the parent job.\n"
-        "These MOGIRI_PARENT_* variables are only available when a job is triggered by "
+        "These MOGIRI_PARENT_* variables are only available "
+        "when a job is triggered by "
         "another job within a workflow.\n\n"
-        "The following Python packages are available in the current environment: "
+        "The following Python packages are available "
+        "in the current environment: "
         + _get_installed_packages() + "\n"
-        "When suggesting Python scripts, prefer using these installed packages. "
-        "If a task requires a package not listed above, mention that it needs to be installed.\n\n"
+        "When suggesting Python scripts, prefer using "
+        "these installed packages. "
+        "If a task requires a package not listed above, "
+        "mention that it needs to be installed.\n\n"
         + _get_samples_reference()
     )
 
@@ -371,7 +392,8 @@ def ai_chat():
         prompt_parts.append("")
     if current_command.strip():
         prompt_parts.append(
-            f"The user's current {command_type} command in the editor:\n```\n{current_command}\n```\n"
+            f"The user's current {command_type} command "
+            f"in the editor:\n```\n{current_command}\n```\n"
         )
     prompt_parts.append(message)
     prompt = "\n".join(prompt_parts)
@@ -408,7 +430,11 @@ def ai_chat():
                 if err.strip():
                     yield f"data: {json.dumps({'error': err.strip()})}\n\n"
         except FileNotFoundError:
-            yield f"data: {json.dumps({'error': f'{cmd_label} command not found. Make sure {cmd_label} CLI is installed.'})}\n\n"
+            err_msg = (
+                f"{cmd_label} command not found. "
+                f"Make sure {cmd_label} CLI is installed."
+            )
+            yield f"data: {json.dumps({'error': err_msg})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
         yield "data: [DONE]\n\n"

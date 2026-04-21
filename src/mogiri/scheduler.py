@@ -12,7 +12,13 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from mogiri.models import (
-    Execution, Job, Setting, Workflow, WorkflowEdge, WorkflowNodePosition, db,
+    Execution,
+    Job,
+    Setting,
+    Workflow,
+    WorkflowEdge,
+    WorkflowNodePosition,
+    db,
 )
 
 scheduler = BackgroundScheduler()
@@ -30,7 +36,11 @@ def _cleanup_stale_executions(app):
         if stale:
             for ex in stale:
                 ex.status = "failed"
-                ex.stderr = (ex.stderr or "") + "\n[mogiri] Marked as failed: process lost on server restart"
+                ex.stderr = (
+                    (ex.stderr or "")
+                    + "\n[mogiri] Marked as failed: "
+                    "process lost on server restart"
+                )
                 ex.finished_at = datetime.now()
             db.session.commit()
             print(f"[mogiri] Cleaned up {len(stale)} stale running execution(s)")
@@ -95,7 +105,8 @@ def _add_scheduler_job(job):
             replace_existing=True,
             max_instances=1,
         )
-        print(f"[mogiri] Registered job: {job.name} ({job.schedule_type}: {job.schedule_value})")
+        sched = f"{job.schedule_type}: {job.schedule_value}"
+        print(f"[mogiri] Registered job: {job.name} ({sched})")
     except Exception as e:
         print(f"[mogiri] Failed to schedule job {job.id} ({job.name}): {e}")
 
@@ -214,7 +225,10 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
         try:
             entry_nodes = json.loads(wf.entry_node_keys or "[]")
         except (json.JSONDecodeError, TypeError) as e:
-            print(f"[mogiri] Warning: failed to parse entry_node_keys for workflow {wf.id}: {e}")
+            print(
+                f"[mogiri] Warning: failed to parse "
+                f"entry_node_keys for workflow {wf.id}: {e}"
+            )
 
         if entry_nodes:
             launched = False
@@ -248,7 +262,10 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
         try:
             entry_ids = set(json.loads(wf.entry_job_ids or "[]"))
         except (json.JSONDecodeError, TypeError) as e:
-            print(f"[mogiri] Warning: failed to parse entry_job_ids for workflow {wf.id}: {e}")
+            print(
+                f"[mogiri] Warning: failed to parse "
+                f"entry_job_ids for workflow {wf.id}: {e}"
+            )
 
         if not entry_ids:
             # Fallback: auto-detect
@@ -315,7 +332,10 @@ def execute_job(
             try:
                 env.update(json.loads(job.env_vars))
             except (json.JSONDecodeError, TypeError) as e:
-                print(f"[mogiri] Warning: failed to parse env vars for job {job.id}: {e}")
+                print(
+                    f"[mogiri] Warning: failed to parse "
+                    f"env vars for job {job.id}: {e}"
+                )
 
         # Inject parent execution info for chain jobs
         if triggered_by_execution_id:
@@ -471,7 +491,10 @@ def _trigger_chains(execution, workflow_id, source_node_key, chain_visit_counts,
         # Check visit count against max_iterations
         visit_key = edge.target_node_key or edge.target_job_id
         if chain_visit_counts.get(visit_key, 0) >= max_iterations:
-            print(f"[mogiri] Loop limit reached ({max_iterations}): skipping {visit_key}")
+            print(
+                f"[mogiri] Loop limit reached "
+                f"({max_iterations}): skipping {visit_key}"
+            )
             continue
 
         target_job = db.session.get(Job, edge.target_job_id)

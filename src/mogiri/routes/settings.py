@@ -2,7 +2,7 @@ import json
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
-from mogiri.models import Setting, db
+from mogiri.models import Setting
 
 bp = Blueprint("settings", __name__, url_prefix="/settings")
 
@@ -15,7 +15,11 @@ def index():
     except (json.JSONDecodeError, TypeError):
         env_vars = {}
     ai_provider = Setting.get("ai_provider", "claude")
-    return render_template("settings/index.html", env_vars=env_vars, ai_provider=ai_provider)
+    return render_template(
+        "settings/index.html",
+        env_vars=env_vars,
+        ai_provider=ai_provider,
+    )
 
 
 @bp.route("/", methods=["POST"])

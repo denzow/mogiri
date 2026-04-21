@@ -1,8 +1,8 @@
 import pytest
 
 from mogiri import create_app
-from mogiri.models import db as _db
 from mogiri import scheduler as _scheduler_module
+from mogiri.models import db as _db
 
 
 @pytest.fixture()

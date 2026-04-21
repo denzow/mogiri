@@ -29,7 +29,8 @@ def _wf_schedule_ctx(wf):
 
     st = wf.schedule_type if wf else "none"
     sv = wf.schedule_value if wf else ""
-    cron_parts = sv.split() if st == "cron" and sv and len(sv.split()) == 5 else ["*"] * 5
+    is_cron = st == "cron" and sv and len(sv.split()) == 5
+    cron_parts = sv.split() if is_cron else ["*"] * 5
     return {
         "prefix": "wf",
         "schedule_type": st or "none",
@@ -92,9 +93,14 @@ def workflow_toggle(workflow_id):
         badge = '<span class="badge badge-enabled">Enabled</span>'
     else:
         badge = '<span class="badge badge-disabled">Disabled</span>'
-    return f"""<span hx-patch="{url_for('workflows.workflow_toggle', workflow_id=wf.id)}"
-                     hx-swap="outerHTML"
-                     class="toggle-btn">{badge}</span>"""
+    toggle_url = url_for(
+        'workflows.workflow_toggle', workflow_id=wf.id,
+    )
+    return (
+        f'<span hx-patch="{toggle_url}"'
+        f' hx-swap="outerHTML"'
+        f' class="toggle-btn">{badge}</span>'
+    )
 
 
 # ---------- Run workflow ----------
@@ -109,7 +115,11 @@ def workflow_run(workflow_id):
     if not wf:
         abort(404)
 
-    thread = threading.Thread(target=execute_workflow, args=(wf.id,), kwargs={"force": True})
+    thread = threading.Thread(
+        target=execute_workflow,
+        args=(wf.id,),
+        kwargs={"force": True},
+    )
     thread.start()
 
     history_url = url_for("workflows.chain_history", workflow_id=wf.id)

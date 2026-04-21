@@ -91,11 +91,13 @@ def create_job():
 
     command_type = data.get("command_type", "shell")
     if command_type not in VALID_COMMAND_TYPES:
-        return jsonify({"error": f"command_type must be one of {VALID_COMMAND_TYPES}"}), 400
+        msg = f"command_type must be one of {VALID_COMMAND_TYPES}"
+        return jsonify({"error": msg}), 400
 
     schedule_type = data.get("schedule_type", "none")
     if schedule_type not in VALID_SCHEDULE_TYPES:
-        return jsonify({"error": f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"}), 400
+        msg = f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"
+        return jsonify({"error": msg}), 400
 
     env_vars = data.get("env_vars", {})
     if isinstance(env_vars, dict):
@@ -135,13 +137,15 @@ def update_job(job_id):
         job.description = data["description"]
     if "command_type" in data:
         if data["command_type"] not in VALID_COMMAND_TYPES:
-            return jsonify({"error": f"command_type must be one of {VALID_COMMAND_TYPES}"}), 400
+            msg = f"command_type must be one of {VALID_COMMAND_TYPES}"
+            return jsonify({"error": msg}), 400
         job.command_type = data["command_type"]
     if "command" in data:
         job.command = data["command"]
     if "schedule_type" in data:
         if data["schedule_type"] not in VALID_SCHEDULE_TYPES:
-            return jsonify({"error": f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"}), 400
+            msg = f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"
+            return jsonify({"error": msg}), 400
         job.schedule_type = data["schedule_type"]
     if "schedule_value" in data:
         job.schedule_value = data["schedule_value"]
@@ -265,7 +269,8 @@ def create_workflow():
 
     schedule_type = data.get("schedule_type", "none")
     if schedule_type not in VALID_SCHEDULE_TYPES:
-        return jsonify({"error": f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"}), 400
+        msg = f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"
+        return jsonify({"error": msg}), 400
 
     wf = Workflow(
         name=name,
@@ -295,7 +300,11 @@ def update_workflow(workflow_id):
         wf.description = data["description"]
     if "schedule_type" in data:
         if data["schedule_type"] not in VALID_SCHEDULE_TYPES:
-            return jsonify({"error": f"schedule_type must be one of {VALID_SCHEDULE_TYPES}"}), 400
+            msg = (
+                f"schedule_type must be one of "
+                f"{VALID_SCHEDULE_TYPES}"
+            )
+            return jsonify({"error": msg}), 400
         wf.schedule_type = data["schedule_type"]
     if "schedule_value" in data:
         wf.schedule_value = data["schedule_value"]

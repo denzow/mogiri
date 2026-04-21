@@ -1,7 +1,8 @@
 import json
 import time
 
-from mogiri.models import Execution, Job, Workflow, WorkflowEdge, db as _db
+from mogiri.models import Execution, Job, Workflow, WorkflowEdge
+from mogiri.models import db as _db
 from mogiri.scheduler import execute_job, execute_workflow
 
 
@@ -114,7 +115,7 @@ def test_disabled_workflow_not_triggered(app):
         wf.is_enabled = False
         _db.session.commit()
         wf_id = wf.id
-        job_a_id = job_a.id
+        _ = job_a.id
 
     execute_workflow(wf_id)
     time.sleep(0.5)
@@ -152,7 +153,7 @@ def test_multiple_workflows_same_jobs(app):
         ))
         _db.session.commit()
 
-        wf1_id, wf2_id = wf1.id, wf2.id
+        wf1_id, _ = wf1.id, wf2.id
         job_b_id, job_c_id = job_b.id, job_c.id
 
     # Only run workflow 1
@@ -170,8 +171,14 @@ def test_workflow_save_api(client, app):
     with app.app_context():
         wf = Workflow(name="Test WF")
         _db.session.add(wf)
-        job_a = Job(name="A", command="echo a", schedule_type="cron", schedule_value="* * * * *")
-        job_b = Job(name="B", command="echo b", schedule_type="cron", schedule_value="* * * * *")
+        job_a = Job(
+            name="A", command="echo a",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
+        job_b = Job(
+            name="B", command="echo b",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
         _db.session.add_all([job_a, job_b])
         _db.session.commit()
         wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
@@ -209,8 +216,14 @@ def test_workflow_save_allows_cycle(client, app):
     with app.app_context():
         wf = Workflow(name="Test WF")
         _db.session.add(wf)
-        job_a = Job(name="A", command="echo a", schedule_type="cron", schedule_value="* * * * *")
-        job_b = Job(name="B", command="echo b", schedule_type="cron", schedule_value="* * * * *")
+        job_a = Job(
+            name="A", command="echo a",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
+        job_b = Job(
+            name="B", command="echo b",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
         _db.session.add_all([job_a, job_b])
         _db.session.commit()
         wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
@@ -238,8 +251,14 @@ def test_workflow_save_allows_same_job_different_nodes(client, app):
     with app.app_context():
         wf = Workflow(name="Test WF")
         _db.session.add(wf)
-        job_a = Job(name="A", command="echo a", schedule_type="cron", schedule_value="* * * * *")
-        job_b = Job(name="B", command="echo b", schedule_type="cron", schedule_value="* * * * *")
+        job_a = Job(
+            name="A", command="echo a",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
+        job_b = Job(
+            name="B", command="echo b",
+            schedule_type="cron", schedule_value="* * * * *",
+        )
         _db.session.add_all([job_a, job_b])
         _db.session.commit()
         wf_id, a_id, b_id = wf.id, job_a.id, job_b.id
