@@ -141,3 +141,4 @@ class WorkflowNodePosition(db.Model):
     node_key = db.Column(db.String, nullable=False)  # e.g. "job-uuid:0"
     x = db.Column(db.Float, nullable=False, default=0)
     y = db.Column(db.Float, nullable=False, default=0)
+    env_vars = db.Column(db.Text, default="{}")  # JSON string — per-node overrides

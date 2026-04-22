@@ -157,10 +157,16 @@ def workflow_editor(workflow_id):
 
     jobs = Job.query.order_by(Job.name).all()
     edges = WorkflowEdge.query.filter_by(workflow_id=wf.id).all()
-    node_positions = [
-        {"node_key": p.node_key, "job_id": p.job_id, "x": p.x, "y": p.y}
-        for p in WorkflowNodePosition.query.filter_by(workflow_id=wf.id).all()
-    ]
+    node_positions_raw = WorkflowNodePosition.query.filter_by(workflow_id=wf.id).all()
+    node_positions = []
+    for p in node_positions_raw:
+        np = {"node_key": p.node_key, "job_id": p.job_id, "x": p.x, "y": p.y}
+        if p.env_vars and p.env_vars != "{}":
+            try:
+                np["env_vars"] = _json.loads(p.env_vars)
+            except (ValueError, TypeError):
+                pass
+        node_positions.append(np)
 
     jobs_data = [
         {"id": j.id, "name": j.name, "command_type": j.command_type or "shell"}
@@ -267,12 +273,15 @@ def workflow_save(workflow_id):
     # Replace node positions (supports multiple instances of same job)
     WorkflowNodePosition.query.filter_by(workflow_id=wf.id).delete()
     for np in node_positions:
+        node_env = np.get("env_vars")
+        env_str = _json.dumps(node_env) if isinstance(node_env, dict) else "{}"
         db.session.add(WorkflowNodePosition(
             workflow_id=wf.id,
             job_id=np["job_id"],
             node_key=np["node_key"],
             x=np["x"],
             y=np["y"],
+            env_vars=env_str,
         ))
 
     db.session.commit()

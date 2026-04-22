@@ -248,10 +248,15 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
                 if not job_id:
                     continue
                 launched = True
+                node_env = _load_node_env_vars(wf.id, node_key)
                 thread = threading.Thread(
                     target=execute_job,
                     args=(job_id,),
-                    kwargs={"_workflow_id": wf.id, "_node_key": node_key},
+                    kwargs={
+                        "_workflow_id": wf.id,
+                        "_node_key": node_key,
+                        "_node_env_vars": node_env,
+                    },
                 )
                 thread.start()
             if launched:
@@ -283,6 +288,23 @@ def execute_workflow(workflow_id: str, force: bool = False) -> None:
             thread.start()
 
 
+# ---------- Helpers ----------
+
+def _load_node_env_vars(workflow_id, node_key):
+    """Load env_vars dict for a specific node in a workflow."""
+    if not node_key:
+        return {}
+    pos = WorkflowNodePosition.query.filter_by(
+        workflow_id=workflow_id, node_key=node_key,
+    ).first()
+    if pos and pos.env_vars:
+        try:
+            return json.loads(pos.env_vars)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}
+
+
 # ---------- Job execution ----------
 
 def execute_job(
@@ -293,6 +315,7 @@ def execute_job(
     triggered_by_chain_id: str = None,
     _chain_visit_counts: dict = None,
     _parent_output: str = None,
+    _node_env_vars: dict = None,
 ) -> None:
     """Execute a job's command and record the result."""
     app = _app
@@ -336,6 +359,9 @@ def execute_job(
                     f"[mogiri] Warning: failed to parse "
                     f"env vars for job {job.id}: {e}"
                 )
+        # Per-node vars (set in workflow editor) override job and global ones
+        if _node_env_vars:
+            env.update(_node_env_vars)
 
         # Inject parent execution info for chain jobs
         if triggered_by_execution_id:
@@ -501,6 +527,7 @@ def _trigger_chains(execution, workflow_id, source_node_key, chain_visit_counts,
         if not target_job:
             continue
 
+        target_env = _load_node_env_vars(workflow_id, edge.target_node_key)
         thread = threading.Thread(
             target=execute_job,
             args=(edge.target_job_id,),
@@ -511,6 +538,7 @@ def _trigger_chains(execution, workflow_id, source_node_key, chain_visit_counts,
                 "triggered_by_chain_id": edge.id,
                 "_chain_visit_counts": chain_visit_counts,
                 "_parent_output": parent_output,
+                "_node_env_vars": target_env,
             },
         )
         thread.start()

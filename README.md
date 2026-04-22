@@ -51,7 +51,7 @@
 | **Shell & Python** | シェルコマンドまたは Python スクリプトを実行 |
 | **Workflows** | 複数ジョブを DAG で連結し、成功/失敗条件で分岐実行 |
 | **AI Assistant** | ジョブ作成画面で Claude / Gemini CLI によるスクリプト生成支援 |
-| **Environment Variables** | グローバル + ジョブ別の環境変数。チェーン実行時は親ジョブの結果を自動注入 |
+| **Environment Variables** | グローバル・ジョブ別・ワークフローノード別の環境変数。チェーン実行時は親ジョブの結果を自動注入 |
 | **Execution Logs** | stdout / stderr を保存し、Web UI から閲覧。自動ローテーション対応 |
 | **Job Timeout** | ジョブごとにタイムアウトを設定可能。暴走プロセスを防止 |
 | **REST API** | ジョブ・ワークフロー・実行履歴・設定の JSON API（トークン認証付き） |
@@ -211,6 +211,15 @@ curl -s http://127.0.0.1:8899/api/executions?job_id=<id>&limit=1
 ## Job Environment Variables
 
 ジョブ実行時に mogiri が自動的にセットする環境変数です。
+
+### 環境変数の優先順位
+
+同じキーが複数レベルで定義されている場合、以下の順で上書きされます（下が優先）:
+
+1. OS 環境変数（`os.environ`）
+2. グローバル環境変数（Settings 画面）
+3. ジョブ固有の環境変数（Job 編集画面）
+4. ワークフローノード固有の環境変数（Workflow エディタ）
 
 ### 全ジョブ共通
 

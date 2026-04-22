@@ -51,7 +51,7 @@ A simple job manager that runs locally. Create jobs, schedule them with cron, an
 | **Shell & Python** | Execute shell commands or Python scripts |
 | **Workflows** | Chain multiple jobs as a DAG with success/failure conditional branching |
 | **AI Assistant** | Generate scripts with Claude / Gemini CLI from the job creation form |
-| **Environment Variables** | Global + per-job env vars. Chain jobs auto-inject parent job results |
+| **Environment Variables** | Global, per-job, and per-workflow-node env vars. Chain jobs auto-inject parent job results |
 | **Execution Logs** | Save stdout/stderr and browse from Web UI. Auto-rotation supported |
 | **Job Timeout** | Per-job configurable timeout to prevent runaway processes |
 | **REST API** | JSON API for jobs, workflows, executions, and settings |
@@ -218,6 +218,15 @@ See [samples/README.md](samples/README.md) for details.
 ## Job Environment Variables
 
 Environment variables automatically set by mogiri when executing jobs.
+
+### Environment Variable Priority
+
+When the same key is defined at multiple levels, later levels override earlier ones (highest priority last):
+
+1. OS environment (`os.environ`)
+2. Global env vars (Settings page)
+3. Per-job env vars (Job edit form)
+4. Per-workflow-node env vars (Workflow editor)
 
 ### All Jobs
 

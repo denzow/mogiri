@@ -98,7 +98,7 @@ Additional env vars: `MOGIRI_PASSWORD` (Web UI password), `MOGIRI_SECRET_KEY` (F
 - **Scheduler is disabled in tests** (`TESTING=True` skips `init_scheduler`). Test fixtures set `scheduler._app` manually for `execute_job` tests.
 - **`use_reloader=False`** in `mogiri serve` — Flask's reloader would spawn a second APScheduler.
 - **Two command types**: `shell` (runs via `shell=True` in subprocess.run) and `python` (writes to temp file, runs with `sys.executable`).
-- **Environment variables**: Global env vars in `Setting` table, per-job env vars in `jobs.env_vars` (JSON). At execution: `os.environ` + global + job-specific (later overrides earlier).
+- **Environment variables**: Global env vars in `Setting` table, per-job env vars in `Job.env_vars` (JSON), per-node env vars in `WorkflowNodePosition.env_vars` (JSON). At execution: `os.environ` + global + job-specific + node-specific (later overrides earlier).
 - **Data directory** defaults to `~/.mogiri/`, overridable via `MOGIRI_DATA_DIR` env var.
 - **Workflows** define DAGs of jobs with edges (success/failure/any conditions). Entry jobs are stored in `Workflow.entry_job_ids`. Cycle detection prevents invalid graphs.
 - **Chain execution** runs in threads; `max_iterations` per workflow limits loop visits per node.

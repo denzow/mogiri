@@ -46,7 +46,7 @@
             <span class="condition-legend-item"><span class="condition-legend-dot dot-failure"></span> F = failure</span>
             <span class="condition-legend-item"><span class="condition-legend-dot dot-any"></span> A = any</span>
         </span>
-        &mdash; Click edge to cycle condition, <kbd>Delete</kbd> to remove.
+        &mdash; Click edge to cycle condition, <kbd>Delete</kbd> to remove. Click node to set env vars.
     </p>
     <div style="display: flex; align-items: center; gap: 0.4rem; white-space: nowrap;">
         <label for="max-iterations" style="font-size: 0.8rem; color: var(--color-text-muted);">Max loop:</label>
@@ -90,6 +90,22 @@
     </div>
 </div>
 
+<div id="node-env-panel" style="display: none; margin-top: 1rem;">
+    <div class="card form-card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>Environment Variables: <strong id="node-env-panel-title"></strong></span>
+            <button type="button" class="btn btn-sm" onclick="closeNodeEnvPanel()" style="padding: 0.1rem 0.4rem; font-size: 0.7rem;">Close</button>
+        </div>
+        <div class="card-body">
+            <p style="font-size: 0.8rem; color: var(--color-text-muted); margin-top: 0;">
+                This node's variables override global env vars. Job-specific variables (set in job settings) take highest priority.
+            </p>
+            <div id="node-env-vars-container"></div>
+            <button type="button" onclick="addNodeEnvVar()" class="btn btn-sm">+ Add Variable</button>
+        </div>
+    </div>
+</div>
+
 <div id="save-feedback" class="flash flash-success" style="display: none; position: fixed; top: 70px; right: 2rem; z-index: 200;">
     Saved!
 </div>
@@ -115,6 +131,7 @@ const nodeKeyToDrawflow = {};
 const drawflowToNodeKey = {};
 const drawflowToJobId = {};
 const instanceCounters = {};
+const nodeEnvVars = {};  // node_key -> {KEY: VALUE, ...}
 
 // Output port ↔ condition mapping
 const OUTPUT_TO_CONDITION = {output_1: 'success', output_2: 'failure', output_3: 'any'};
@@ -185,6 +202,7 @@ function addJobNode(jobId, x, y, nodeKey) {
     nodeKeyToDrawflow[nk] = nodeId;
     drawflowToNodeKey[nodeId] = nk;
     drawflowToJobId[nodeId] = jobId;
+    updateNodeEnvBadge(nk);
     if (nodeKey) {
         const idx = parseInt((nodeKey.split(':')[1]) || '0', 10);
         if (!instanceCounters[jobId] || instanceCounters[jobId] <= idx)
@@ -201,14 +219,117 @@ editor.on('nodeRemoved', function(nodeId) {
     }
     const nk = drawflowToNodeKey[nodeId];
     if (nk) {
+        delete nodeEnvVars[nk];
         delete nodeKeyToDrawflow[nk];
         delete drawflowToNodeKey[nodeId];
         delete drawflowToJobId[nodeId];
     }
+    closeNodeEnvPanel();
 });
 
+// --- Node env vars panel (click to open) ---
+let selectedNodeKey = null;
+
+container.addEventListener('click', function(e) {
+    const nodeEl = e.target.closest('.drawflow-node');
+    if (!nodeEl) return;
+    const nodeId = nodeEl.id.replace('node-', '');
+    if (parseInt(nodeId) === START_NODE_ID) return;
+    const nk = drawflowToNodeKey[nodeId];
+    const jobId = drawflowToJobId[nodeId];
+    if (!nk || !jobId) return;
+    openNodeEnvPanel(nk, jobId);
+});
+
+function openNodeEnvPanel(nodeKey, jobId) {
+    selectedNodeKey = nodeKey;
+    const job = jobMap[jobId];
+    const title = document.getElementById('node-env-panel-title');
+    title.textContent = job ? job.name : nodeKey;
+
+    const container = document.getElementById('node-env-vars-container');
+    container.innerHTML = '';
+    const envs = nodeEnvVars[nodeKey] || {};
+    for (const [k, v] of Object.entries(envs)) {
+        appendNodeEnvRow(container, k, v);
+    }
+
+    document.getElementById('node-env-panel').style.display = '';
+}
+
+function closeNodeEnvPanel() {
+    saveCurrentNodeEnvVars();
+    selectedNodeKey = null;
+    document.getElementById('node-env-panel').style.display = 'none';
+}
+
+function addNodeEnvVar() {
+    const container = document.getElementById('node-env-vars-container');
+    appendNodeEnvRow(container, '', '');
+    markDirty();
+}
+
+function appendNodeEnvRow(container, key, value) {
+    const row = document.createElement('div');
+    row.className = 'env-var-row';
+    row.innerHTML = `
+        <input type="text" class="node-env-key" value="${escapeHtml(key)}" placeholder="KEY" oninput="onNodeEnvChange()">
+        <input type="text" class="node-env-value" value="${escapeHtml(value)}" placeholder="VALUE" oninput="onNodeEnvChange()">
+        <button type="button" onclick="this.parentElement.remove(); onNodeEnvChange();" class="btn btn-danger btn-sm">Remove</button>
+    `;
+    container.appendChild(row);
+}
+
+function onNodeEnvChange() {
+    saveCurrentNodeEnvVars();
+    markDirty();
+}
+
+function saveCurrentNodeEnvVars() {
+    if (!selectedNodeKey) return;
+    const keys = document.querySelectorAll('#node-env-vars-container .node-env-key');
+    const values = document.querySelectorAll('#node-env-vars-container .node-env-value');
+    const env = {};
+    keys.forEach((keyEl, i) => {
+        const k = keyEl.value.trim();
+        if (k) env[k] = values[i].value;
+    });
+    if (Object.keys(env).length > 0) {
+        nodeEnvVars[selectedNodeKey] = env;
+    } else {
+        delete nodeEnvVars[selectedNodeKey];
+    }
+    updateNodeEnvBadge(selectedNodeKey);
+}
+
+function updateNodeEnvBadge(nodeKey) {
+    const drawflowId = nodeKeyToDrawflow[nodeKey];
+    if (drawflowId == null) return;
+    const nodeEl = document.getElementById('node-' + drawflowId);
+    if (!nodeEl) return;
+    const existing = nodeEl.querySelector('.env-badge');
+    if (existing) existing.remove();
+    const count = nodeEnvVars[nodeKey] ? Object.keys(nodeEnvVars[nodeKey]).length : 0;
+    if (count > 0) {
+        const chainNode = nodeEl.querySelector('.chain-node');
+        if (chainNode) {
+            const badge = document.createElement('span');
+            badge.className = 'badge env-badge';
+            badge.style.cssText = 'font-size:0.5rem; background: var(--color-primary); color: #fff;';
+            badge.title = 'Env vars';
+            badge.textContent = 'E:' + count;
+            chainNode.appendChild(badge);
+        }
+    }
+}
+
 // --- Restore saved state ---
-existingNodePositions.forEach(np => addJobNode(np.job_id, np.x, np.y, np.node_key));
+existingNodePositions.forEach(np => {
+    if (np.env_vars && Object.keys(np.env_vars).length > 0) {
+        nodeEnvVars[np.node_key] = np.env_vars;
+    }
+    addJobNode(np.job_id, np.x, np.y, np.node_key);
+});
 
 // Restore edges between job nodes (prefer node_key, fallback to job_id)
 existingEdges.forEach(edge => {
@@ -342,6 +463,7 @@ restoringState = false;
 
 // --- Save ---
 document.getElementById('save-btn').addEventListener('click', () => {
+    saveCurrentNodeEnvVars();
     const exportData = editor.export();
     const connections = [];
     const nodePositions = [];
@@ -369,7 +491,9 @@ document.getElementById('save-btn').addEventListener('click', () => {
 
         const jobId = node.data.job_id;
         const nodeKey = node.data.node_key;
-        nodePositions.push({job_id: jobId, node_key: nodeKey, x: node.pos_x, y: node.pos_y});
+        const npEntry = {job_id: jobId, node_key: nodeKey, x: node.pos_x, y: node.pos_y};
+        if (nodeEnvVars[nodeKey]) npEntry.env_vars = nodeEnvVars[nodeKey];
+        nodePositions.push(npEntry);
 
         for (const [outputClass, outConns] of Object.entries(node.outputs)) {
             const condition = OUTPUT_TO_CONDITION[outputClass] || 'success';
